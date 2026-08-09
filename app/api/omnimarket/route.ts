@@ -85,8 +85,7 @@ async function loadClient(): Promise<GenLayerClient> {
     throw new Error("Set GENLAYER_OMNIMARKET_CONTRACT_ADDRESS and GENLAYER_RPC_URL before using live contract reads.");
   }
 
-  const dynamicImport = Function("specifier", "return import(specifier)") as (specifier: string) => Promise<GenLayerSdk>;
-  const sdk = await dynamicImport("genlayer-js");
+  const sdk = (await import("genlayer-js")) as GenLayerSdk;
   if (!sdk.createClient) {
     throw new Error("Installed genlayer-js package does not expose createClient.");
   }
