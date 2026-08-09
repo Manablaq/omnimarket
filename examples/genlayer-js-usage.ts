@@ -1,10 +1,12 @@
 import { createClient } from "genlayer-js";
 
+type HexAddress = `0x${string}`;
+
 const client = createClient({
   endpoint: process.env.GENLAYER_RPC_URL!,
 });
 
-const contractAddress = process.env.OMNIMARKET_ADDRESS!;
+const contractAddress = process.env.GENLAYER_OMNIMARKET_CONTRACT_ADDRESS as HexAddress;
 
 export async function createExampleMarket() {
   return client.writeContract({
@@ -29,4 +31,3 @@ export async function getYesPrice(marketId: bigint) {
     args: [marketId, 0],
   });
 }
-
