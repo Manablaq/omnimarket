@@ -162,6 +162,7 @@ export default function Home() {
 
   const selected = snapshots.find((item) => item.market.market_id === selectedId) ?? snapshots[0];
   const selectedMarket = selected?.market;
+  const contentReady = Boolean(selectedMarket && selected);
   const selectedPrice = selected ? (side === 0 ? selected.price0Bps : selected.price1Bps) : 0;
   const selectedOutcome = selected ? (side === 0 ? selected.market.outcome_0 : selected.market.outcome_1) : "";
   const totalPool = selected ? selected.market.total_0 + selected.market.total_1 : 0;
@@ -180,7 +181,7 @@ export default function Home() {
     );
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, []);
+  }, [contentReady]);
 
   useEffect(() => {
     const provider = walletProvider();
