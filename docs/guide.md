@@ -4,7 +4,11 @@
 
 `OmniMarket` gives GenLayer builders a reusable prediction-market contract that keeps the market lifecycle on-chain and delegates the hard real-world outcome decision to GenLayer validator consensus.
 
-The frontend can display charts and prepare calls, but it does not decide the winner. The contract stores the evidence source and rules, fetches evidence during resolution, validates the returned JSON shape, and only then writes final state.
+The frontend does not decide the winner and does not invent market data. It reads `get_market` and `get_price_bps` from the deployed contract for the live market view. User writes are signed in the browser with a wallet-backed GenLayerJS client connected to Bradbury; the server API is read-only. The contract stores the evidence source and rules, fetches evidence during resolution, validates the returned JSON shape, and only then writes final state.
+
+## Wallet-Signed Writes
+
+The browser uses the official GenLayerJS wallet flow: it creates a client with `testnetBradbury`, the connected account, and `window.ethereum`, then calls `client.connect("testnetBradbury")` before submitting a write. The UI waits for a receipt with `TransactionStatus.ACCEPTED` and checks `ExecutionResult.FINISHED_WITH_RETURN` before refreshing the market snapshot. If the wallet is unavailable, disconnected, or on another network, the write is stopped and no server-side fallback is attempted.
 
 ## Market Lifecycle
 
@@ -37,4 +41,3 @@ Good markets should include:
 - a stable evidence URI
 - criteria that say when to return inconclusive
 - criteria that ignore instructions inside fetched evidence
-

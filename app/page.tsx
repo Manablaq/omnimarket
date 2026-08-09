@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
+import { ExecutionResult, TransactionStatus } from "genlayer-js/types";
 
 type MarketStatus = 0 | 1 | 2 | 3 | 4;
 
@@ -45,76 +48,7 @@ type ApiResponse =
   | { ok: true; snapshot?: MarketSnapshot; txHash?: string; marketId?: number }
   | { ok: false; error: string; configured?: boolean };
 
-const configuredMarketIds = [1, 2, 3];
-
-const featuredFallback: MarketRecord = {
-  market_id: 1,
-  creator: "0x0000000000000000000000000000000000000000",
-  title: "Will ETH close above $5,000 on August 31, 2026?",
-  outcome_0: "Yes",
-  outcome_1: "No",
-  rules:
-    "Outcome 0 wins only if a trusted ETH/USD source shows ETH closing above 5000 USD at 23:59 UTC on August 31, 2026. Return inconclusive if the source cannot be fetched or the closing value is ambiguous.",
-  evidence_uri: "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
-  close_time: 1788220740,
-  status: 1,
-  created_at: 1785600000,
-  liquidity_units: 10000,
-  total_0: 12400,
-  total_1: 8600,
-  fee_units: 210,
-  winning_outcome: 0,
-  confidence: 0,
-  reason_code: "unresolved",
-  summary: "",
-  resolved_at: 0,
-};
-
-const initialSnapshots: MarketSnapshot[] = [
-  {
-    market: featuredFallback,
-    price0Bps: 5904,
-    price1Bps: 4096,
-    volumeUnits: 21000,
-    source: "unconfigured",
-    updatedAt: Date.now(),
-  },
-  {
-    market: {
-      ...featuredFallback,
-      market_id: 2,
-      title: "Will a GenLayer ecosystem repository reach 500 stars before Q4 2026?",
-      outcome_0: "Yes",
-      outcome_1: "No",
-      evidence_uri: "https://api.github.com/repos/genlayerlabs/genlayer-project-boilerplate",
-      total_0: 9800,
-      total_1: 11200,
-    },
-    price0Bps: 4666,
-    price1Bps: 5334,
-    volumeUnits: 21000,
-    source: "unconfigured",
-    updatedAt: Date.now(),
-  },
-  {
-    market: {
-      ...featuredFallback,
-      market_id: 3,
-      title: "Will the next public CPI print come in below consensus forecast?",
-      outcome_0: "Below",
-      outcome_1: "At or Above",
-      evidence_uri: "https://www.bls.gov/cpi/",
-      status: 2,
-      total_0: 14300,
-      total_1: 17700,
-    },
-    price0Bps: 4468,
-    price1Bps: 5532,
-    volumeUnits: 32000,
-    source: "unconfigured",
-    updatedAt: Date.now(),
-  },
-];
+const configuredMarketIds = [1];
 
 function statusLabel(status: MarketStatus) {
   if (status === 1) return "Trading";
@@ -150,7 +84,11 @@ function formatDate(seconds: number) {
 }
 
 function chartPath(points: number[]) {
-  if (points.length < 2) return "";
+  if (points.length === 0) return "";
+  if (points.length === 1) {
+    const y = 100 - points[0] / 100;
+    return `M 0 ${y.toFixed(2)} L 100 ${y.toFixed(2)}`;
+  }
   return points
     .map((point, index) => {
       const x = (index / (points.length - 1)) * 100;
@@ -165,6 +103,24 @@ type ChartSeries = {
   no: number[];
 };
 
+type WalletProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
+};
+
+type EthereumWindow = Window & { ethereum?: WalletProvider };
+
+const OMNIMARKET_ADDRESS = "0x0E1201A1F5477e635306BC3E34e68658e4489fBd" as `0x${string}`;
+
+function walletProvider() {
+  return (window as EthereumWindow).ethereum;
+}
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 async function callOmniMarketApi(action: string, payload: Record<string, unknown> = {}): Promise<ApiResponse> {
   const response = await fetch("/api/omnimarket", {
     method: "POST",
@@ -175,22 +131,22 @@ async function callOmniMarketApi(action: string, payload: Record<string, unknown
 }
 
 export default function Home() {
-  const [snapshots, setSnapshots] = useState<MarketSnapshot[]>(initialSnapshots);
+  const [snapshots, setSnapshots] = useState<MarketSnapshot[]>([]);
   const [selectedId, setSelectedId] = useState(1);
   const [side, setSide] = useState<0 | 1>(0);
   const [stakeUnits, setStakeUnits] = useState(500);
   const [wallet, setWallet] = useState("");
+  const [walletChainId, setWalletChainId] = useState("");
+  const [walletVerified, setWalletVerified] = useState(false);
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [marketLoadError, setMarketLoadError] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState<ActivityItem>({
     label: "Contract bridge",
     detail: "Waiting for Bradbury contract configuration.",
     tone: "warn",
   });
-  const [history, setHistory] = useState<Record<number, ChartSeries>>({
-    1: { yes: [5200, 5350, 5480, 5610, 5720, 5904], no: [4800, 4650, 4520, 4390, 4280, 4096] },
-    2: { yes: [5050, 4960, 4810, 4700, 4666], no: [4950, 5040, 5190, 5300, 5334] },
-    3: { yes: [4200, 4320, 4410, 4490, 4468], no: [5800, 5680, 5590, 5510, 5532] },
-  });
+  const [history, setHistory] = useState<Record<number, ChartSeries>>({});
   const [marketForm, setMarketForm] = useState({
     title: "Will genlayerlabs/genlayer-project-boilerplate exist on GitHub?",
     outcome0: "Yes",
@@ -202,19 +158,20 @@ export default function Home() {
     liquidity: "10000",
   });
 
+  const walletReady = Boolean(wallet && walletChainId && walletVerified);
+
   const selected = snapshots.find((item) => item.market.market_id === selectedId) ?? snapshots[0];
-  const selectedPrice = side === 0 ? selected.price0Bps : selected.price1Bps;
-  const selectedOutcome = side === 0 ? selected.market.outcome_0 : selected.market.outcome_1;
-  const totalPool = selected.market.total_0 + selected.market.total_1;
+  const selectedMarket = selected?.market;
+  const selectedPrice = selected ? (side === 0 ? selected.price0Bps : selected.price1Bps) : 0;
+  const selectedOutcome = selected ? (side === 0 ? selected.market.outcome_0 : selected.market.outcome_1) : "";
+  const totalPool = selected ? selected.market.total_0 + selected.market.total_1 : 0;
   const estimatedPayout = selectedPrice > 0 ? Math.round((stakeUnits * 10000) / selectedPrice) : 0;
   const chartPoints = useMemo(
-    () => history[selected.market.market_id] ?? { yes: [selected.price0Bps], no: [selected.price1Bps] },
-    [history, selected.market.market_id, selected.price0Bps],
+    () => selected ? history[selected.market.market_id] ?? { yes: [selected.price0Bps], no: [selected.price1Bps] } : { yes: [], no: [] },
+    [history, selected],
   );
   const yesPath = useMemo(() => chartPath(chartPoints.yes), [chartPoints.yes]);
   const noPath = useMemo(() => chartPath(chartPoints.no), [chartPoints.no]);
-  const configured = selected.source === "contract";
-
   useEffect(() => {
     const sections = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
     const observer = new IntersectionObserver(
@@ -225,12 +182,44 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const provider = walletProvider();
+    if (!provider) return;
+
+    const syncWallet = async () => {
+      const [accounts, chainId] = await Promise.all([
+        provider.request({ method: "eth_accounts" }) as Promise<string[]>,
+        provider.request({ method: "eth_chainId" }) as Promise<string>,
+      ]);
+      setWallet(accounts[0] ?? "");
+      setWalletChainId(chainId ?? "");
+      setWalletVerified(false);
+    };
+    const handleAccounts = (accounts: unknown) => {
+      setWallet(Array.isArray(accounts) ? String(accounts[0] ?? "") : "");
+      setWalletVerified(false);
+    };
+    const handleChain = (chainId: unknown) => {
+      setWalletChainId(String(chainId ?? ""));
+      setWalletVerified(false);
+    };
+
+    void syncWallet();
+    provider.on?.("accountsChanged", handleAccounts);
+    provider.on?.("chainChanged", handleChain);
+    return () => {
+      provider.removeListener?.("accountsChanged", handleAccounts);
+      provider.removeListener?.("chainChanged", handleChain);
+    };
+  }, []);
+
   const refreshMarket = useCallback(
     async (marketId: number, quiet = false) => {
       if (!quiet) setBusy("refresh");
       try {
         const result = await callOmniMarketApi("snapshot", { marketId });
         if (!result.ok || !result.snapshot) {
+          setMarketLoadError(result.ok ? "The contract returned no market for this id." : result.error);
           setNotice({
             label: "Contract not configured",
             detail: result.ok ? "No market returned from contract." : result.error,
@@ -238,6 +227,7 @@ export default function Home() {
           });
           return;
         }
+        setMarketLoadError("");
         setSnapshots((current) => {
           const next = current.filter((item) => item.market.market_id !== marketId);
           return [...next, result.snapshot!].sort((a, b) => a.market.market_id - b.market.market_id);
@@ -257,6 +247,10 @@ export default function Home() {
           detail: `Market ${marketId} updated from get_market and get_price_bps.`,
           tone: "good",
         });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "The deployed contract could not be read.";
+        setMarketLoadError(detail);
+        setNotice({ label: "Contract read failed", detail, tone: "warn" });
       } finally {
         if (!quiet) setBusy("");
       }
@@ -265,9 +259,7 @@ export default function Home() {
   );
 
   useEffect(() => {
-    configuredMarketIds.forEach((marketId) => {
-      void refreshMarket(marketId, true);
-    });
+    void refreshMarket(configuredMarketIds[0], true);
     const interval = window.setInterval(() => {
       void refreshMarket(selectedId, true);
     }, 12000);
@@ -275,7 +267,7 @@ export default function Home() {
   }, [refreshMarket, selectedId]);
 
   async function connectWallet() {
-    const ethereum = (window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<string[]> } }).ethereum;
+    const ethereum = walletProvider();
     if (!ethereum) {
       setNotice({
         label: "Wallet unavailable",
@@ -284,26 +276,59 @@ export default function Home() {
       });
       return;
     }
-    const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-    setWallet(accounts[0] ?? "");
+    setWalletBusy(true);
+    try {
+      const accounts = (await ethereum.request({ method: "eth_requestAccounts" })) as string[];
+      const account = accounts[0] ?? "";
+      const client = createClient({
+        chain: testnetBradbury,
+        account: account as `0x${string}`,
+        provider: ethereum as Parameters<typeof createClient>[0]["provider"],
+      });
+      await client.connect("testnetBradbury" as Parameters<typeof client.connect>[0]);
+      const chainId = (await ethereum.request({ method: "eth_chainId" })) as string;
+      setWallet(accounts[0] ?? "");
+      setWalletChainId(chainId ?? "");
+      setWalletVerified(true);
+      setNotice({ label: "Wallet connected", detail: "Ready to sign Bradbury transactions.", tone: "good" });
+    } catch (error) {
+      setNotice({ label: "Wallet connection cancelled", detail: error instanceof Error ? error.message : "The wallet did not approve the connection.", tone: "warn" });
+    } finally {
+      setWalletBusy(false);
+    }
+  }
+
+  async function walletWrite(functionName: string, args: unknown[]) {
+    const provider = walletProvider();
+    if (!provider || !wallet) throw new Error("Connect a wallet before signing a transaction.");
+
+    const client = createClient({
+      chain: testnetBradbury,
+      account: wallet as `0x${string}`,
+      provider: provider as Parameters<typeof createClient>[0]["provider"],
+    });
+    await client.connect("testnetBradbury" as Parameters<typeof client.connect>[0]);
+    setWalletVerified(true);
+    const txHash = await client.writeContract({
+      address: OMNIMARKET_ADDRESS,
+      functionName,
+      args: args as Parameters<typeof client.writeContract>[0]["args"],
+      value: BigInt(0),
+    });
+    const receipt = await client.waitForTransactionReceipt({ hash: txHash, status: TransactionStatus.ACCEPTED });
+    if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+      throw new Error(`Transaction consensus completed, but execution returned ${receipt.txExecutionResultName}.`);
+    }
+    return txHash;
   }
 
   async function submitTrade() {
     setBusy("trade");
     try {
-      const result = await callOmniMarketApi("buy_position", {
-        marketId: selected.market.market_id,
-        outcomeIndex: side,
-        stakeUnits,
-        account: wallet,
-      });
-      if (!result.ok) {
-        setNotice({ label: "Trade not submitted", detail: result.error, tone: "warn" });
-        return;
-      }
+      const txHash = await walletWrite("buy_position", [BigInt(selected.market.market_id), side, BigInt(stakeUnits)]);
       setNotice({
         label: "Trade submitted",
-        detail: result.txHash ? `Transaction ${result.txHash}` : "Position submitted to the contract bridge.",
+        detail: `Accepted on Bradbury: ${txHash}`,
         tone: "good",
       });
       await refreshMarket(selected.market.market_id, true);
@@ -315,52 +340,10 @@ export default function Home() {
   async function createMarket() {
     setBusy("create");
     try {
-      const result = await callOmniMarketApi("create_market", {
-        title: marketForm.title,
-        outcome0: marketForm.outcome0,
-        outcome1: marketForm.outcome1,
-        rules: marketForm.rules,
-        evidenceUri: marketForm.evidenceUri,
-        closeTime: Number(marketForm.closeTime),
-        liquidityUnits: Number(marketForm.liquidity),
-        account: wallet,
-      });
-      if (!result.ok) {
-        setNotice({ label: "Market not created", detail: result.error, tone: "warn" });
-        return;
-      }
+      const txHash = await walletWrite("create_market", [marketForm.title, marketForm.outcome0, marketForm.outcome1, marketForm.rules, marketForm.evidenceUri, BigInt(Number(marketForm.closeTime)), BigInt(Number(marketForm.liquidity))]);
       setNotice({
         label: "Market created",
-        detail: `Contract returned market id ${result.marketId ?? "pending"}.`,
-        tone: "good",
-      });
-      if (result.marketId) {
-        setSelectedId(result.marketId);
-        await refreshMarket(result.marketId, true);
-      }
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function resolveForStudio() {
-    setBusy("resolve");
-    try {
-      const result = await callOmniMarketApi("admin_resolve_for_studio", {
-        marketId: selected.market.market_id,
-        winningOutcome: side,
-        confidence: 9500,
-        reasonCode: "studio_verified",
-        summary: `${selectedOutcome} selected through the Studio test resolver.`,
-        account: wallet,
-      });
-      if (!result.ok) {
-        setNotice({ label: "Resolution not submitted", detail: result.error, tone: "warn" });
-        return;
-      }
-      setNotice({
-        label: "Resolution submitted",
-        detail: result.txHash ? `Transaction ${result.txHash}` : "Resolver call sent to contract bridge.",
+        detail: `Accepted on Bradbury: ${txHash}`,
         tone: "good",
       });
       await refreshMarket(selected.market.market_id, true);
@@ -369,11 +352,48 @@ export default function Home() {
     }
   }
 
+  async function resolveForStudio() {
+    setBusy("resolve");
+    try {
+      const txHash = await walletWrite("admin_resolve_for_studio", [BigInt(selected.market.market_id), side, 9500, "studio_verified", `${selectedOutcome} selected through the connected wallet.`]);
+      setNotice({
+        label: "Resolution submitted",
+        detail: `Accepted on Bradbury: ${txHash}`,
+        tone: "good",
+      });
+      await refreshMarket(selected.market.market_id, true);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  if (!selectedMarket || !selected) {
+    return (
+      <main className="app-shell">
+        <nav className="topbar" aria-label="Primary">
+          <a className="brand" href="#home" aria-label="OmniMarket home"><span className="brand-mark">OM</span><strong>OmniMarket</strong></a>
+          <div className="nav-links"><a href="#docs">Docs</a><a href="https://github.com/Manablaq/omnimarket" target="_blank" rel="noreferrer">Source ↗</a></div>
+          <div className="wallet-control">
+            {walletReady ? <span className="wallet-network"><i />Bradbury</span> : null}
+            <button className="wallet-button" type="button" onClick={connectWallet} disabled={walletBusy}>{walletBusy ? "Connecting..." : wallet ? shortAddress(wallet) : "Connect Wallet"}</button>
+          </div>
+        </nav>
+        <section className="live-empty reveal is-visible" id="home">
+          <div className="section-kicker">LIVE CONTRACT DATA</div>
+          <h1>{marketLoadError ? "Market data unavailable." : "Reading the Bradbury market."}</h1>
+          <p>{marketLoadError || "OmniMarket will show a market only after get_market and get_price_bps return from the deployed contract."}</p>
+          <button className="primary-action" type="button" onClick={() => void refreshMarket(1)} disabled={busy === "refresh"}>{busy === "refresh" ? "Refreshing..." : "Retry contract read"}</button>
+          <p className={`live-status ${notice.tone}`} aria-live="polite">{notice.label}</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <nav className="topbar" aria-label="Primary">
         <a className="brand" href="#home" aria-label="OmniMarket home">
-          <span className="brand-mark">GF</span>
+          <span className="brand-mark">OM</span>
           <strong>OmniMarket</strong>
         </a>
         <div className="nav-links">
@@ -382,9 +402,12 @@ export default function Home() {
           <a href="#docs">Docs</a>
           <a href="#contract">Contract</a>
         </div>
-        <button className="wallet-button" type="button" onClick={connectWallet}>
-          {wallet ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : "Connect Wallet"}
-        </button>
+        <div className="wallet-control">
+          {walletReady ? <span className="wallet-network"><i />Bradbury</span> : null}
+          <button className="wallet-button" type="button" onClick={connectWallet} disabled={walletBusy}>
+            {walletBusy ? "Connecting..." : wallet ? shortAddress(wallet) : "Connect Wallet"}
+          </button>
+        </div>
       </nav>
 
       <section className="hero reveal" id="home">
@@ -398,24 +421,6 @@ export default function Home() {
           <div className="hero-actions">
             <a className="primary-link" href="#markets">Open market console</a>
             <a className="secondary-link" href="#how-it-works">How it works <span>↘</span></a>
-          </div>
-        </div>
-        <div className="hero-terminal" aria-label="Contract health">
-          <div className="terminal-row">
-            <span>Contract</span>
-            <strong>OmniMarket</strong>
-          </div>
-          <div className="terminal-row">
-            <span>Data source</span>
-            <strong>{configured ? "Bradbury contract reads" : "Awaiting env configuration"}</strong>
-          </div>
-          <div className="terminal-row">
-            <span>Chart input</span>
-            <strong>get_price_bps</strong>
-          </div>
-          <div className={`status-note ${notice.tone}`}>
-            <span>{notice.label}</span>
-            <p>{notice.detail}</p>
           </div>
         </div>
       </section>
@@ -526,10 +531,10 @@ export default function Home() {
                 <div><span>Est. payout</span><strong>{formatUnits(estimatedPayout)}</strong></div>
                 <div><span>Total pool</span><strong>{formatUnits(totalPool)}</strong></div>
               </div>
-              <button className="primary-action" type="button" onClick={submitTrade} disabled={busy === "trade" || !wallet}>
-                {busy === "trade" ? "Submitting" : "Submit buy_position"}
+              <button className="primary-action" type="button" onClick={submitTrade} disabled={busy === "trade" || !walletReady}>
+                {busy === "trade" ? "Waiting for wallet" : "Sign buy_position"}
               </button>
-              {!wallet ? <p className="helper">Connect a wallet before submitting contract writes.</p> : null}
+              {!walletReady ? <p className="helper">Connect your wallet to sign this Bradbury transaction.</p> : null}
             </section>
 
             <section className="panel">
@@ -573,8 +578,8 @@ export default function Home() {
               <li>Closed markets use `resolve_market` for web evidence consensus.</li>
               <li>Studio tests can use `admin_resolve_for_studio` before public launch.</li>
             </ol>
-            <button className="secondary-action" type="button" onClick={resolveForStudio} disabled={busy === "resolve" || !wallet}>
-              {busy === "resolve" ? "Resolving" : "Studio resolve selected side"}
+            <button className="secondary-action" type="button" onClick={resolveForStudio} disabled={busy === "resolve" || !walletReady}>
+              {busy === "resolve" ? "Waiting for wallet" : "Sign test resolution"}
             </button>
           </section>
 
@@ -628,8 +633,8 @@ export default function Home() {
             <textarea value={marketForm.rules} onChange={(event) => setMarketForm({ ...marketForm, rules: event.target.value })} />
           </label>
         </div>
-        <button className="primary-action create-button" type="button" onClick={createMarket} disabled={busy === "create" || !wallet}>
-          {busy === "create" ? "Creating" : "Submit create_market"}
+        <button className="primary-action create-button" type="button" onClick={createMarket} disabled={busy === "create" || !walletReady}>
+          {busy === "create" ? "Waiting for wallet" : "Sign create_market"}
         </button>
       </section>
 

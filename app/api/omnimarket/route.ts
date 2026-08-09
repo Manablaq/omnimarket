@@ -1,7 +1,6 @@
 type GenLayerSdk = typeof import("genlayer-js");
 type GenLayerClient = ReturnType<GenLayerSdk["createClient"]>;
 type ReadContractRequest = Parameters<GenLayerClient["readContract"]>[0];
-type WriteContractRequest = Parameters<GenLayerClient["writeContract"]>[0];
 type ContractAddress = ReadContractRequest["address"];
 type ContractArgs = NonNullable<ReadContractRequest["args"]>;
 
@@ -121,19 +120,6 @@ async function snapshot(marketId: number) {
   };
 }
 
-async function writeContract(functionName: string, args: unknown[]) {
-  const client = await loadClient();
-  const request: WriteContractRequest = {
-    address: contractAddress(),
-    functionName,
-    args: contractArgs(args),
-    value: BigInt(0),
-  };
-  const result = await client.writeContract(request);
-  if (typeof result === "string") return result;
-  return JSON.stringify(result);
-}
-
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
   try {
@@ -151,40 +137,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (action === "buy_position") {
-      const txHash = await writeContract("buy_position", [
-        BigInt(toNumber(body.marketId)),
-        toNumber(body.outcomeIndex),
-        BigInt(toNumber(body.stakeUnits)),
-      ]);
-      return json({ ok: true, txHash });
-    }
-
-    if (action === "create_market") {
-      const txHash = await writeContract("create_market", [
-        String(body.title ?? ""),
-        String(body.outcome0 ?? ""),
-        String(body.outcome1 ?? ""),
-        String(body.rules ?? ""),
-        String(body.evidenceUri ?? ""),
-        BigInt(toNumber(body.closeTime)),
-        BigInt(toNumber(body.liquidityUnits)),
-      ]);
-      return json({ ok: true, txHash });
-    }
-
-    if (action === "admin_resolve_for_studio") {
-      const txHash = await writeContract("admin_resolve_for_studio", [
-        BigInt(toNumber(body.marketId)),
-        toNumber(body.winningOutcome),
-        toNumber(body.confidence),
-        String(body.reasonCode ?? ""),
-        String(body.summary ?? ""),
-      ]);
-      return json({ ok: true, txHash });
-    }
-
-    return json({ ok: false, error: `Unknown action: ${action}` }, 400);
+    return json({ ok: false, error: `Unsupported API action: ${action}. Wallet writes are signed in the browser.` }, 400);
   } catch (error) {
     return json({
       ok: false,

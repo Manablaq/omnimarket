@@ -50,7 +50,7 @@ The app in `app/page.tsx` is a production-facing market console:
 
 - live implied-probability chart powered by contract reads through `/api/omnimarket`
 - multi-market selector
-- wallet connection surface
+- browser wallet connection and Bradbury network validation
 - market creation form
 - trade action mapped to `buy_position`
 - Studio resolution control mapped to `admin_resolve_for_studio`
@@ -67,6 +67,14 @@ npm run dev
 ```
 
 `genlayer-js` is listed as a runtime dependency for Bradbury reads and wallet-backed writes. Vercel installs dependencies with `npm install` during deployment.
+
+### What Is Live
+
+The production UI does not ship sample markets or synthetic prices. The server route reads `get_market` and both `get_price_bps` values from the configured deployed contract. The chart is populated only from successful contract snapshots, and refreshes every 12 seconds.
+
+Writes are signed by the visitor's browser wallet. The app creates a wallet-backed GenLayerJS client on `testnetBradbury`, calls `client.connect("testnetBradbury")`, submits the selected contract method, and waits for an `ACCEPTED` receipt. The API route is intentionally read-only; it never signs or submits a transaction on behalf of a user.
+
+The current Bradbury deployment is `0x0E1201A1F5477e635306BC3E34e68658e4489fBd`. A wallet must be connected to Bradbury before a user can create a market, trade, or run the Studio resolver action.
 
 Build:
 

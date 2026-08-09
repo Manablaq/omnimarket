@@ -808,7 +808,7 @@ body {
 
 .hero {
   max-width: 1520px;
-  grid-template-columns: minmax(0, 1.5fr) minmax(330px, .7fr);
+  grid-template-columns: 1fr;
   gap: 0;
   overflow: hidden;
   border-radius: 6px;
@@ -823,6 +823,7 @@ body {
 }
 
 .hero-copy-block {
+  max-width: 1100px;
   min-height: 540px;
   padding: 34px 58px 52px;
   color: #f7f8f4;
@@ -1129,6 +1130,69 @@ body {
   text-decoration: none;
 }
 
+.wallet-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wallet-network {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.wallet-network i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(25, 121, 77, .14);
+}
+
+.live-empty {
+  display: grid;
+  justify-items: start;
+  max-width: 920px;
+  min-height: 520px;
+  margin: 0 auto;
+  padding: 120px 12px 100px;
+}
+
+.live-empty h1 {
+  max-width: 760px;
+  margin: 14px 0 16px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(48px, 7vw, 86px);
+  font-weight: 400;
+  letter-spacing: -.04em;
+  line-height: .95;
+}
+
+.live-empty p {
+  max-width: 600px;
+  margin: 0 0 26px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.live-status {
+  margin: 18px 0 0;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.live-status.warn {
+  color: #a34b20;
+}
+
 .reveal {
   opacity: 0;
   transform: translateY(22px);
@@ -1156,6 +1220,10 @@ body {
   .topbar {
     position: static;
     flex-wrap: wrap;
+  }
+
+  .wallet-control {
+    margin-left: auto;
   }
 
   .nav-links {
