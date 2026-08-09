@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { testnetAsimov, testnetBradbury } from "genlayer-js/chains";
 import { ExecutionResult, TransactionStatus } from "genlayer-js/types";
 
 type MarketStatus = 0 | 1 | 2 | 3 | 4;
+type NetworkName = "testnetBradbury" | "testnetAsimov";
 
 type MarketRecord = {
   market_id: number;
@@ -121,6 +122,10 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function networkLabel(network: NetworkName) {
+  return network === "testnetBradbury" ? "Bradbury" : "Asimov";
+}
+
 async function callOmniMarketApi(action: string, payload: Record<string, unknown> = {}): Promise<ApiResponse> {
   const response = await fetch("/api/omnimarket", {
     method: "POST",
@@ -139,6 +144,9 @@ export default function Home() {
   const [walletChainId, setWalletChainId] = useState("");
   const [walletVerified, setWalletVerified] = useState(false);
   const [walletBusy, setWalletBusy] = useState(false);
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkName>("testnetBradbury");
   const [marketLoadError, setMarketLoadError] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState<ActivityItem>({
@@ -158,7 +166,8 @@ export default function Home() {
     liquidity: "10000",
   });
 
-  const walletReady = Boolean(wallet && walletChainId && walletVerified);
+  const walletReady = Boolean(wallet && walletChainId && walletVerified && selectedNetwork === "testnetBradbury");
+  const walletPanelRef = useRef<HTMLDivElement>(null);
 
   const selected = snapshots.find((item) => item.market.market_id === selectedId) ?? snapshots[0];
   const selectedMarket = selected?.market;
@@ -182,6 +191,17 @@ export default function Home() {
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
   }, [contentReady]);
+
+  useEffect(() => {
+    if (!walletMenuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (walletPanelRef.current && !walletPanelRef.current.contains(event.target as Node)) {
+        setWalletMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [walletMenuOpen]);
 
   useEffect(() => {
     const provider = walletProvider();
@@ -272,7 +292,7 @@ export default function Home() {
     };
   }, [refreshMarket, selectedId]);
 
-  async function connectWallet() {
+  async function connectWallet(network: NetworkName = selectedNetwork) {
     const ethereum = walletProvider();
     if (!ethereum) {
       setNotice({
@@ -286,17 +306,19 @@ export default function Home() {
     try {
       const accounts = (await ethereum.request({ method: "eth_requestAccounts" })) as string[];
       const account = accounts[0] ?? "";
+      const chains = { testnetBradbury, testnetAsimov };
       const client = createClient({
-        chain: testnetBradbury,
+        chain: chains[network],
         account: account as `0x${string}`,
         provider: ethereum as NonNullable<Parameters<typeof createClient>[0]>["provider"],
       });
-      await client.connect("testnetBradbury" as Parameters<typeof client.connect>[0]);
+      await client.connect(network as Parameters<typeof client.connect>[0]);
       const chainId = (await ethereum.request({ method: "eth_chainId" })) as string;
       setWallet(accounts[0] ?? "");
       setWalletChainId(chainId ?? "");
       setWalletVerified(true);
-      setNotice({ label: "Wallet connected", detail: "Ready to sign Bradbury transactions.", tone: "good" });
+      setWalletMenuOpen(false);
+      setNotice({ label: "Wallet connected", detail: `Connected to ${networkLabel(network)}.`, tone: "good" });
     } catch (error) {
       setNotice({ label: "Wallet connection cancelled", detail: error instanceof Error ? error.message : "The wallet did not approve the connection.", tone: "warn" });
     } finally {
@@ -304,9 +326,44 @@ export default function Home() {
     }
   }
 
+  async function copyWalletAddress() {
+    if (!wallet) return;
+    try {
+      await navigator.clipboard.writeText(wallet);
+      setCopiedAddress(true);
+      window.setTimeout(() => setCopiedAddress(false), 1800);
+    } catch {
+      setNotice({ label: "Copy unavailable", detail: "Your browser did not grant clipboard access.", tone: "warn" });
+    }
+  }
+
+  function disconnectWallet() {
+    setWallet("");
+    setWalletChainId("");
+    setWalletVerified(false);
+    setWalletMenuOpen(false);
+    setNotice({ label: "Wallet disconnected", detail: "OmniMarket cleared its local wallet session.", tone: "info" });
+  }
+
+  function changeNetwork(network: NetworkName) {
+    setSelectedNetwork(network);
+    setWalletVerified(false);
+    setWalletMenuOpen(false);
+    if (wallet) {
+      void connectWallet(network);
+      return;
+    }
+    setNotice({
+      label: `${networkLabel(network)} selected`,
+      detail: network === "testnetBradbury" ? "OmniMarket contract is deployed here." : "No OmniMarket contract is deployed on Asimov.",
+      tone: network === "testnetBradbury" ? "info" : "warn",
+    });
+  }
+
   async function walletWrite(functionName: string, args: unknown[]) {
     const provider = walletProvider();
     if (!provider || !wallet) throw new Error("Connect a wallet before signing a transaction.");
+    if (selectedNetwork !== "testnetBradbury") throw new Error("OmniMarket writes are only available on Bradbury for this deployment.");
 
     const client = createClient({
       chain: testnetBradbury,
@@ -379,9 +436,19 @@ export default function Home() {
         <nav className="topbar" aria-label="Primary">
           <a className="brand" href="#home" aria-label="OmniMarket home"><span className="brand-mark">OM</span><strong>OmniMarket</strong></a>
           <div className="nav-links"><a href="#docs">Docs</a><a href="https://github.com/Manablaq/omnimarket" target="_blank" rel="noreferrer">Source ↗</a></div>
-          <div className="wallet-control">
+          <div className="wallet-control" ref={walletPanelRef}>
             {walletReady ? <span className="wallet-network"><i />Bradbury</span> : null}
-            <button className="wallet-button" type="button" onClick={connectWallet} disabled={walletBusy}>{walletBusy ? "Connecting..." : wallet ? shortAddress(wallet) : "Connect Wallet"}</button>
+            <button className="wallet-button" type="button" onClick={() => wallet ? setWalletMenuOpen((open) => !open) : void connectWallet()} disabled={walletBusy} aria-expanded={wallet ? walletMenuOpen : undefined}>
+              {walletBusy ? "Connecting..." : wallet ? shortAddress(wallet) : "Connect Wallet"}
+            </button>
+            {wallet && walletMenuOpen ? <div className="wallet-menu" role="dialog" aria-label="Wallet controls">
+              <div className="wallet-menu-heading"><span>Connected wallet</span><strong>{shortAddress(wallet)}</strong></div>
+              <button className="wallet-menu-action" type="button" onClick={() => void copyWalletAddress()}>{copiedAddress ? "Copied" : "Copy address"}</button>
+              <label className="wallet-network-picker"><span>Network</span><select value={selectedNetwork} onChange={(event) => changeNetwork(event.target.value as NetworkName)}><option value="testnetBradbury">Bradbury · OmniMarket live</option><option value="testnetAsimov">Asimov · no deployment</option></select></label>
+              {selectedNetwork !== "testnetBradbury" ? <p className="wallet-menu-warning">Trading is unavailable until Bradbury is selected.</p> : null}
+              <button className="wallet-menu-disconnect" type="button" onClick={disconnectWallet}>Disconnect app</button>
+              <small>Disconnecting clears OmniMarket&apos;s session. To revoke wallet permissions completely, use your wallet extension.</small>
+            </div> : null}
           </div>
         </nav>
         <section className="live-empty reveal is-visible" id="home">
@@ -408,11 +475,19 @@ export default function Home() {
           <a href="#docs">Docs</a>
           <a href="#contract">Contract</a>
         </div>
-        <div className="wallet-control">
+        <div className="wallet-control" ref={walletPanelRef}>
           {walletReady ? <span className="wallet-network"><i />Bradbury</span> : null}
-          <button className="wallet-button" type="button" onClick={connectWallet} disabled={walletBusy}>
+          <button className="wallet-button" type="button" onClick={() => wallet ? setWalletMenuOpen((open) => !open) : void connectWallet()} disabled={walletBusy} aria-expanded={wallet ? walletMenuOpen : undefined}>
             {walletBusy ? "Connecting..." : wallet ? shortAddress(wallet) : "Connect Wallet"}
           </button>
+          {wallet && walletMenuOpen ? <div className="wallet-menu" role="dialog" aria-label="Wallet controls">
+            <div className="wallet-menu-heading"><span>Connected wallet</span><strong>{shortAddress(wallet)}</strong></div>
+            <button className="wallet-menu-action" type="button" onClick={() => void copyWalletAddress()}>{copiedAddress ? "Copied" : "Copy address"}</button>
+            <label className="wallet-network-picker"><span>Network</span><select value={selectedNetwork} onChange={(event) => changeNetwork(event.target.value as NetworkName)}><option value="testnetBradbury">Bradbury · OmniMarket live</option><option value="testnetAsimov">Asimov · no deployment</option></select></label>
+            {selectedNetwork !== "testnetBradbury" ? <p className="wallet-menu-warning">Trading is unavailable until Bradbury is selected.</p> : null}
+            <button className="wallet-menu-disconnect" type="button" onClick={disconnectWallet}>Disconnect app</button>
+            <small>Disconnecting clears OmniMarket&apos;s session. To revoke wallet permissions completely, use your wallet extension.</small>
+          </div> : null}
         </div>
       </nav>
 

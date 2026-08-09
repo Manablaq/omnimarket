@@ -1131,9 +1131,107 @@ body {
 }
 
 .wallet-control {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.wallet-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(320px, calc(100vw - 28px));
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(8, 18, 31, .18);
+}
+
+.wallet-menu-heading {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wallet-menu-heading span,
+.wallet-network-picker > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.wallet-menu-heading strong {
+  overflow: hidden;
+  color: var(--navy);
+  font-size: 15px;
+  text-overflow: ellipsis;
+}
+
+.wallet-menu-action,
+.wallet-menu-disconnect {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+}
+
+.wallet-menu-action:hover,
+.wallet-menu-action:focus-visible {
+  border-color: var(--navy);
+  background: var(--soft);
+}
+
+.wallet-network-picker {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+}
+
+.wallet-network-picker select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 700;
+}
+
+.wallet-menu-warning {
+  margin: 12px 0 0;
+  padding: 10px;
+  border-left: 3px solid #d17a36;
+  background: #fff4e9;
+  color: #8a451d;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wallet-menu-disconnect {
+  border-color: #d9b4b0;
+  color: #9a352e;
+}
+
+.wallet-menu small {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .wallet-network {
@@ -1224,6 +1322,10 @@ body {
 
   .wallet-control {
     margin-left: auto;
+  }
+
+  .wallet-menu {
+    right: 0;
   }
 
   .nav-links {
