@@ -259,11 +259,16 @@ export default function Home() {
   );
 
   useEffect(() => {
-    void refreshMarket(configuredMarketIds[0], true);
+    const initialRead = window.setTimeout(() => {
+      void refreshMarket(configuredMarketIds[0], true);
+    }, 0);
     const interval = window.setInterval(() => {
       void refreshMarket(selectedId, true);
     }, 12000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialRead);
+      window.clearInterval(interval);
+    };
   }, [refreshMarket, selectedId]);
 
   async function connectWallet() {
