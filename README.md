@@ -66,7 +66,7 @@ npm install
 npm run dev
 ```
 
-`genlayer-js` is listed as a runtime dependency for Bradbury reads and wallet-backed writes. Refresh the lockfile with `npm install` before creating the public repo.
+`genlayer-js` is listed as a runtime dependency for Bradbury reads and wallet-backed writes. Vercel installs dependencies with `npm install` during deployment.
 
 Build:
 

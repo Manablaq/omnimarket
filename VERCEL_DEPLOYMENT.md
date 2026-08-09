@@ -12,6 +12,15 @@ GENLAYER_CHAIN_ID=bradbury
 GENLAYER_OMNIMARKET_CONTRACT_ADDRESS=0x0E1201A1F5477e635306BC3E34e68658e4489fBd
 ```
 
+## Vercel Import Settings
+
+- Repository: `https://github.com/Manablaq/omnimarket`
+- Framework preset: `Next.js`
+- Install command: `npm install`
+- Build command: `npm run build`
+- Output directory: leave as Vercel default
+- Node.js version: `22.x`
+
 ## Contract Read Flow
 
 The frontend polls:
