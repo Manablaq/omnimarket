@@ -21,6 +21,7 @@ export async function createExampleMarket() {
       9999999999n,
       10000n,
     ],
+    value: 0n,
   });
 }
 
