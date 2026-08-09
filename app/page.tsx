@@ -288,7 +288,7 @@ export default function Home() {
       const client = createClient({
         chain: testnetBradbury,
         account: account as `0x${string}`,
-        provider: ethereum as Parameters<typeof createClient>[0]["provider"],
+        provider: ethereum as NonNullable<Parameters<typeof createClient>[0]>["provider"],
       });
       await client.connect("testnetBradbury" as Parameters<typeof client.connect>[0]);
       const chainId = (await ethereum.request({ method: "eth_chainId" })) as string;
@@ -310,7 +310,7 @@ export default function Home() {
     const client = createClient({
       chain: testnetBradbury,
       account: wallet as `0x${string}`,
-      provider: provider as Parameters<typeof createClient>[0]["provider"],
+      provider: provider as NonNullable<Parameters<typeof createClient>[0]>["provider"],
     });
     await client.connect("testnetBradbury" as Parameters<typeof client.connect>[0]);
     setWalletVerified(true);
