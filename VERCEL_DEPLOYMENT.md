@@ -7,7 +7,6 @@ This project is intended to become a public prediction market app after the `Omn
 Set these in Vercel before public launch:
 
 ```text
-GENLAYER_RPC_URL=
 GENLAYER_CHAIN_ID=bradbury
 GENLAYER_OMNIMARKET_CONTRACT_ADDRESS=0x0E1201A1F5477e635306BC3E34e68658e4489fBd
 ```
@@ -46,8 +45,7 @@ Public production writes require a wallet-backed GenLayer client or a configured
 1. Deploy `studio_bradbury/omnimarket.py` on Bradbury.
 2. Record the contract address in `TEST_LOG_BRADBURY.md`.
 3. Set `GENLAYER_OMNIMARKET_CONTRACT_ADDRESS` in Vercel to `0x0E1201A1F5477e635306BC3E34e68658e4489fBd`.
-4. Set `GENLAYER_RPC_URL`.
-5. Create at least one live market from Studio or the app.
-6. Confirm the app chart changes after `buy_position`.
-7. Confirm `get_market` reflects pool totals after trade.
-8. Confirm the production URL has no unconfigured contract warning.
+4. Create at least one live market from Studio or the app.
+5. Confirm the app chart changes after `buy_position`.
+6. Confirm `get_market` reflects pool totals after trade.
+7. Confirm the production URL has no unconfigured contract warning.

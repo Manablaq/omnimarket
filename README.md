@@ -124,13 +124,14 @@ npm run build
 
 ## Environment
 
-Copy `.env.example` and set:
+Copy `.env.example` and set the deployed contract address:
 
 ```text
-GENLAYER_RPC_URL=
 GENLAYER_CHAIN_ID=bradbury
 GENLAYER_OMNIMARKET_CONTRACT_ADDRESS=
 ```
+
+The read bridge uses GenLayerJS's official `testnetBradbury` chain configuration, so it does not require a manually supplied RPC URL.
 
 The app is not linked to `OutcomeAttestationRegistry` or `SemanticPolicyGate`.
 

@@ -1,3 +1,5 @@
+import { testnetBradbury } from "genlayer-js/chains";
+
 type GenLayerSdk = typeof import("genlayer-js");
 type GenLayerClient = ReturnType<GenLayerSdk["createClient"]>;
 type ReadContractRequest = Parameters<GenLayerClient["readContract"]>[0];
@@ -27,8 +29,6 @@ type MarketTuple = {
 };
 
 const CONTRACT_ADDRESS = process.env.GENLAYER_OMNIMARKET_CONTRACT_ADDRESS ?? "";
-const RPC_URL = process.env.GENLAYER_RPC_URL ?? "";
-const CHAIN_ID = process.env.GENLAYER_CHAIN_ID ?? "bradbury";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,14 +70,13 @@ function normalizeMarket(value: unknown) {
 }
 
 async function loadClient(): Promise<GenLayerClient> {
-  if (!CONTRACT_ADDRESS || !RPC_URL) {
-    throw new Error("Set GENLAYER_OMNIMARKET_CONTRACT_ADDRESS and GENLAYER_RPC_URL before using live contract reads.");
+  if (!CONTRACT_ADDRESS) {
+    throw new Error("Set GENLAYER_OMNIMARKET_CONTRACT_ADDRESS before using live contract reads.");
   }
 
   const sdk = await import("genlayer-js");
   return sdk.createClient({
-    endpoint: RPC_URL,
-    chainId: CHAIN_ID,
+    chain: testnetBradbury,
   } as Parameters<GenLayerSdk["createClient"]>[0]);
 }
 
@@ -142,7 +141,7 @@ export async function POST(request: Request) {
     return json({
       ok: false,
       error: error instanceof Error ? error.message : "Contract bridge failed.",
-      configured: Boolean(CONTRACT_ADDRESS && RPC_URL),
+      configured: Boolean(CONTRACT_ADDRESS),
     });
   }
 }

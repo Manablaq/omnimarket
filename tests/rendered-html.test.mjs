@@ -26,7 +26,8 @@ test("omnimarket api maps frontend actions to contract methods", async () => {
   const route = await source("app/api/omnimarket/route.ts");
 
   assert.match(route, /GENLAYER_OMNIMARKET_CONTRACT_ADDRESS/);
-  assert.match(route, /GENLAYER_RPC_URL/);
+  assert.match(route, /testnetBradbury/);
+  assert.doesNotMatch(route, /endpoint: RPC_URL/);
   assert.match(route, /functionName: "get_market"/);
   assert.match(route, /functionName: "get_price_bps"/);
   assert.doesNotMatch(route, /writeContract/);
