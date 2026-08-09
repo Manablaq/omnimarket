@@ -1,19 +1,9 @@
-type GenLayerClient = {
-  readContract: (request: {
-    address: string;
-    functionName: string;
-    args: unknown[];
-  }) => Promise<unknown>;
-  writeContract?: (request: {
-    address: string;
-    functionName: string;
-    args: unknown[];
-  }) => Promise<unknown>;
-};
-
-type GenLayerSdk = {
-  createClient?: (options: { endpoint: string; chainId?: string }) => GenLayerClient;
-};
+type GenLayerSdk = typeof import("genlayer-js");
+type GenLayerClient = ReturnType<GenLayerSdk["createClient"]>;
+type ReadContractRequest = Parameters<GenLayerClient["readContract"]>[0];
+type WriteContractRequest = Parameters<GenLayerClient["writeContract"]>[0];
+type ContractAddress = ReadContractRequest["address"];
+type ContractArgs = NonNullable<ReadContractRequest["args"]>;
 
 type MarketTuple = {
   market_id?: unknown;
@@ -85,30 +75,38 @@ async function loadClient(): Promise<GenLayerClient> {
     throw new Error("Set GENLAYER_OMNIMARKET_CONTRACT_ADDRESS and GENLAYER_RPC_URL before using live contract reads.");
   }
 
-  const sdk = (await import("genlayer-js")) as GenLayerSdk;
-  if (!sdk.createClient) {
-    throw new Error("Installed genlayer-js package does not expose createClient.");
-  }
-  return sdk.createClient({ endpoint: RPC_URL, chainId: CHAIN_ID });
+  const sdk = await import("genlayer-js");
+  return sdk.createClient({
+    endpoint: RPC_URL,
+    chainId: CHAIN_ID,
+  } as Parameters<GenLayerSdk["createClient"]>[0]);
+}
+
+function contractAddress(): ContractAddress {
+  return CONTRACT_ADDRESS as ContractAddress;
+}
+
+function contractArgs(values: unknown[]): ContractArgs {
+  return values as ContractArgs;
 }
 
 async function snapshot(marketId: number) {
   const client = await loadClient();
   const [marketRaw, price0Raw, price1Raw] = await Promise.all([
     client.readContract({
-      address: CONTRACT_ADDRESS,
+      address: contractAddress(),
       functionName: "get_market",
-      args: [BigInt(marketId)],
+      args: contractArgs([BigInt(marketId)]),
     }),
     client.readContract({
-      address: CONTRACT_ADDRESS,
+      address: contractAddress(),
       functionName: "get_price_bps",
-      args: [BigInt(marketId), 0],
+      args: contractArgs([BigInt(marketId), 0]),
     }),
     client.readContract({
-      address: CONTRACT_ADDRESS,
+      address: contractAddress(),
       functionName: "get_price_bps",
-      args: [BigInt(marketId), 1],
+      args: contractArgs([BigInt(marketId), 1]),
     }),
   ]);
 
@@ -125,14 +123,13 @@ async function snapshot(marketId: number) {
 
 async function writeContract(functionName: string, args: unknown[]) {
   const client = await loadClient();
-  if (!client.writeContract) {
-    throw new Error("genlayer-js writeContract is not available in this runtime. Use a wallet-backed client or configure a server signer.");
-  }
-  const result = await client.writeContract({
-    address: CONTRACT_ADDRESS,
+  const request: WriteContractRequest = {
+    address: contractAddress(),
     functionName,
-    args,
-  });
+    args: contractArgs(args),
+    value: 0n,
+  };
+  const result = await client.writeContract(request);
   if (typeof result === "string") return result;
   return JSON.stringify(result);
 }
