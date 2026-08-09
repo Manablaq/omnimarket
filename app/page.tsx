@@ -160,6 +160,11 @@ function chartPath(points: number[]) {
     .join(" ");
 }
 
+type ChartSeries = {
+  yes: number[];
+  no: number[];
+};
+
 async function callOmniMarketApi(action: string, payload: Record<string, unknown> = {}): Promise<ApiResponse> {
   const response = await fetch("/api/omnimarket", {
     method: "POST",
@@ -181,10 +186,10 @@ export default function Home() {
     detail: "Waiting for Bradbury contract configuration.",
     tone: "warn",
   });
-  const [history, setHistory] = useState<Record<number, number[]>>({
-    1: [5200, 5350, 5480, 5610, 5720, 5904],
-    2: [5050, 4960, 4810, 4700, 4666],
-    3: [4200, 4320, 4410, 4490, 4468],
+  const [history, setHistory] = useState<Record<number, ChartSeries>>({
+    1: { yes: [5200, 5350, 5480, 5610, 5720, 5904], no: [4800, 4650, 4520, 4390, 4280, 4096] },
+    2: { yes: [5050, 4960, 4810, 4700, 4666], no: [4950, 5040, 5190, 5300, 5334] },
+    3: { yes: [4200, 4320, 4410, 4490, 4468], no: [5800, 5680, 5590, 5510, 5532] },
   });
   const [marketForm, setMarketForm] = useState({
     title: "Will genlayerlabs/genlayer-project-boilerplate exist on GitHub?",
@@ -203,11 +208,22 @@ export default function Home() {
   const totalPool = selected.market.total_0 + selected.market.total_1;
   const estimatedPayout = selectedPrice > 0 ? Math.round((stakeUnits * 10000) / selectedPrice) : 0;
   const chartPoints = useMemo(
-    () => history[selected.market.market_id] ?? [selected.price0Bps],
+    () => history[selected.market.market_id] ?? { yes: [selected.price0Bps], no: [selected.price1Bps] },
     [history, selected.market.market_id, selected.price0Bps],
   );
-  const path = useMemo(() => chartPath(chartPoints), [chartPoints]);
+  const yesPath = useMemo(() => chartPath(chartPoints.yes), [chartPoints.yes]);
+  const noPath = useMemo(() => chartPath(chartPoints.no), [chartPoints.no]);
   const configured = selected.source === "contract";
+
+  useEffect(() => {
+    const sections = Array.from(document.querySelectorAll<HTMLElement>(".reveal"));
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add("is-visible")),
+      { threshold: 0.12 },
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
 
   const refreshMarket = useCallback(
     async (marketId: number, quiet = false) => {
@@ -227,8 +243,14 @@ export default function Home() {
           return [...next, result.snapshot!].sort((a, b) => a.market.market_id - b.market.market_id);
         });
         setHistory((current) => {
-          const nextPoints = [...(current[marketId] ?? []), result.snapshot!.price0Bps].slice(-28);
-          return { ...current, [marketId]: nextPoints };
+          const currentSeries = current[marketId] ?? { yes: [], no: [] };
+          return {
+            ...current,
+            [marketId]: {
+              yes: [...currentSeries.yes, result.snapshot!.price0Bps].slice(-28),
+              no: [...currentSeries.no, result.snapshot!.price1Bps].slice(-28),
+            },
+          };
         });
         setNotice({
           label: "Live contract read",
@@ -355,8 +377,9 @@ export default function Home() {
           <strong>OmniMarket</strong>
         </a>
         <div className="nav-links">
+          <a href="#how-it-works">Protocol</a>
           <a href="#markets">Markets</a>
-          <a href="#create">Create</a>
+          <a href="#docs">Docs</a>
           <a href="#contract">Contract</a>
         </div>
         <button className="wallet-button" type="button" onClick={connectWallet}>
@@ -364,16 +387,17 @@ export default function Home() {
         </button>
       </nav>
 
-      <section className="hero" id="home">
+      <section className="hero reveal" id="home">
         <div className="hero-copy-block">
-          <p className="eyebrow">OmniMarket prediction exchange</p>
-          <h1>Markets that settle from live evidence, not operator promises.</h1>
+          <div className="hero-meta"><span>OMNIMARKET / FIELD NOTE 001</span><span className="live-tag">LIVE BRADBURY PROTOTYPE</span></div>
+          <p className="eyebrow">GENLAYER INTELLIGENT CONTRACT</p>
+          <h1>Markets that settle from <em>live evidence.</em></h1>
           <p className="hero-copy">
-            Create two-outcome markets, trade virtual positions, monitor contract-derived odds, and resolve outcomes through the `OmniMarket` Intelligent Contract.
+            A prediction market primitive for questions the internet can answer. Prices move from real positions, and resolution comes from GenLayer web consensus instead of an operator promise.
           </p>
           <div className="hero-actions">
             <a className="primary-link" href="#markets">Open market console</a>
-            <a className="secondary-link" href="#create">Create market</a>
+            <a className="secondary-link" href="#how-it-works">How it works <span>↘</span></a>
           </div>
         </div>
         <div className="hero-terminal" aria-label="Contract health">
@@ -396,7 +420,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="metrics-strip" aria-label="Market metrics">
+      <section className="metrics-strip reveal" aria-label="Market metrics">
         <div>
           <span>Total displayed volume</span>
           <strong>{formatUnits(snapshots.reduce((sum, item) => sum + item.volumeUnits, 0))} units</strong>
@@ -415,7 +439,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="market-workspace" id="markets">
+      <section className="market-workspace reveal" id="markets">
         <aside className="market-rail" aria-label="Markets">
           <div className="section-head compact">
             <span>Live Markets</span>
@@ -467,7 +491,8 @@ export default function Home() {
               <path d="M 0 75 L 100 75" />
               <path d="M 0 50 L 100 50" />
               <path d="M 0 25 L 100 25" />
-              <path className="chart-line" d={path} />
+              <path className="chart-line yes-line" d={yesPath} />
+              <path className="chart-line no-line" d={noPath} />
             </svg>
             <div className="chart-foot">
               <span>Updated {new Date(selected.updatedAt).toLocaleTimeString()}</span>
@@ -565,7 +590,7 @@ export default function Home() {
         </aside>
       </section>
 
-      <section className="create-section" id="create">
+      <section className="create-section reveal" id="create">
         <div className="section-head">
           <div>
             <span>Create</span>
@@ -607,6 +632,37 @@ export default function Home() {
           {busy === "create" ? "Creating" : "Submit create_market"}
         </button>
       </section>
+
+      <section className="field-notes reveal" id="how-it-works">
+        <div className="section-kicker">ONE CONTRACT, THREE SIGNALS</div>
+        <h2>From a live question to a verifiable outcome.</h2>
+        <p className="section-lede">OmniMarket keeps the market surface legible while the Intelligent Contract carries the hard part: state, incentives, evidence, and consensus.</p>
+        <div className="note-grid">
+          <article className="note-card"><span>01</span><h3>Frame the question</h3><p>Define two outcomes, a close time, and explicit evidence rules before anyone takes a position.</p><a href="#create">Create a market →</a></article>
+          <article className="note-card"><span>02</span><h3>Watch conviction move</h3><p>Every refresh reads both contract prices, so the chart reflects the current market split rather than a mocked feed.</p><a href="#markets">Open the console →</a></article>
+          <article className="note-card"><span>03</span><h3>Resolve with evidence</h3><p>At close, GenLayer validators interpret the defined source and return an outcome, confidence, and reason code.</p><a href="#docs">Read the model →</a></article>
+        </div>
+      </section>
+
+      <section className="docs-band reveal" id="docs">
+        <div>
+          <div className="section-kicker">LIVE PROOF, HONEST BOUNDARY</div>
+          <h2>Prediction is uncertainty. Settlement should be explicit.</h2>
+          <p>Prices are probabilities, not guarantees. Evidence is public, criteria are inspectable, and an inconclusive result remains a first-class contract state.</p>
+        </div>
+        <div className="docs-list">
+          <div><span>PUBLIC</span><strong>Question, rules, evidence URI, positions</strong></div>
+          <div><span>CONSENSUS</span><strong>Web evidence interpreted by GenLayer validators</strong></div>
+          <div><span>ON-CHAIN</span><strong>Market state, prices, resolution, and payouts</strong></div>
+          <a className="docs-link" href="https://github.com/Manablaq/omnimarket" target="_blank" rel="noreferrer">Read the source and test evidence ↗</a>
+        </div>
+      </section>
+
+      <footer className="site-footer">
+        <a className="brand" href="#home"><span className="brand-mark">OM</span><strong>OmniMarket</strong></a>
+        <span>GenLayer Intelligent Contract prediction markets.</span>
+        <a href="#home">Back to top ↑</a>
+      </footer>
     </main>
   );
 }

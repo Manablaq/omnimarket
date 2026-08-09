@@ -10,7 +10,9 @@ test("omnimarket frontend keeps the public market surface", async () => {
   const page = await source("app/page.tsx");
 
   assert.match(page, /OmniMarket/);
-  assert.match(page, /Markets that settle from live evidence/);
+  assert.match(page, /Markets that settle from/);
+  assert.match(page, /yes-line/);
+  assert.match(page, /no-line/);
   assert.match(page, /Submit buy_position/);
   assert.match(page, /GenLayer settlement/);
   assert.match(page, /callOmniMarketApi\("snapshot"/);
