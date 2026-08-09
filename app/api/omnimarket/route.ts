@@ -127,7 +127,7 @@ async function writeContract(functionName: string, args: unknown[]) {
     address: contractAddress(),
     functionName,
     args: contractArgs(args),
-    value: 0n,
+    value: BigInt(0),
   };
   const result = await client.writeContract(request);
   if (typeof result === "string") return result;
