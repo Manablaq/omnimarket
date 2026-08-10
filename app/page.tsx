@@ -173,6 +173,48 @@ function walletProvider() {
   return (window as EthereumWindow).ethereum;
 }
 
+const walletChains = { testnetBradbury, testnetAsimov };
+
+function expectedChainId(network: NetworkName) {
+  return `0x${walletChains[network].id.toString(16)}`;
+}
+
+function walletErrorMessage(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: number }).code : undefined;
+  if (code === 4001) return "The wallet request was rejected.";
+  if (code === 4902) return "Bradbury is not configured in this wallet yet.";
+  if (error instanceof Error && error.message) return error.message;
+  return "The wallet did not approve the request.";
+}
+
+async function ensureWalletNetwork(provider: WalletProvider, network: NetworkName) {
+  const chain = walletChains[network];
+  const chainId = expectedChainId(network);
+  const currentChainId = String(await provider.request({ method: "eth_chainId" })).toLowerCase();
+  if (currentChainId === chainId) return chainId;
+
+  const chainParams = {
+    chainId,
+    chainName: chain.name,
+    rpcUrls: [...chain.rpcUrls.default.http],
+    nativeCurrency: chain.nativeCurrency,
+    blockExplorerUrls: chain.blockExplorers?.default.url ? [chain.blockExplorers.default.url] : [],
+  };
+
+  try {
+    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: number }).code : undefined;
+    if (code !== 4902) throw error;
+    await provider.request({ method: "wallet_addEthereumChain", params: [chainParams] });
+    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
+  }
+
+  const verifiedChainId = String(await provider.request({ method: "eth_chainId" })).toLowerCase();
+  if (verifiedChainId !== chainId) throw new Error(`Wallet is still on chain ${parseInt(verifiedChainId, 16)}. Switch to ${chain.name} to continue.`);
+  return verifiedChainId;
+}
+
 async function callOmniMarketApi(action: string, payload: Record<string, unknown> = {}): Promise<ApiResponse> {
   const response = await fetch("/api/omnimarket", {
     method: "POST",
@@ -206,6 +248,7 @@ export default function Home() {
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkName>("testnetBradbury");
+  const [marketReadState, setMarketReadState] = useState<"loading" | "ready" | "error">("loading");
   const [marketLoadError, setMarketLoadError] = useState("");
   const [sourceAudit, setSourceAudit] = useState<Record<number, SourceObservation[]>>({});
   const [referenceAsset, setReferenceAsset] = useState("BTC");
@@ -282,13 +325,29 @@ export default function Home() {
     const provider = walletProvider();
     if (!provider) return;
     const sync = async () => {
-      const [accounts, chainId] = await Promise.all([provider.request({ method: "eth_accounts" }) as Promise<string[]>, provider.request({ method: "eth_chainId" }) as Promise<string>]);
-      setWallet(accounts[0] ?? "");
-      setWalletChainId(chainId ?? "");
-      setWalletVerified(false);
+      try {
+        const [accounts, chainId] = await Promise.all([provider.request({ method: "eth_accounts" }) as Promise<string[]>, provider.request({ method: "eth_chainId" }) as Promise<string>]);
+        const account = accounts[0] ?? "";
+        const normalizedChainId = String(chainId ?? "").toLowerCase();
+        setWallet(account);
+        setWalletChainId(normalizedChainId);
+        setWalletVerified(Boolean(account && normalizedChainId === expectedChainId("testnetBradbury")));
+      } catch {
+        setWallet("");
+        setWalletChainId("");
+        setWalletVerified(false);
+      }
     };
-    const onAccounts = (accounts: unknown) => { setWallet(Array.isArray(accounts) ? String(accounts[0] ?? "") : ""); setWalletVerified(false); };
-    const onChain = (chainId: unknown) => { setWalletChainId(String(chainId ?? "")); setWalletVerified(false); };
+    const onAccounts = (accounts: unknown) => {
+      const account = Array.isArray(accounts) ? String(accounts[0] ?? "") : "";
+      if (!account) { setWallet(""); setWalletChainId(""); setWalletVerified(false); setPortfolio([]); setWalletMenuOpen(false); return; }
+      void sync();
+    };
+    const onChain = (chainId: unknown) => {
+      const normalizedChainId = String(chainId ?? "").toLowerCase();
+      setWalletChainId(normalizedChainId);
+      setWalletVerified(Boolean(normalizedChainId === expectedChainId("testnetBradbury")));
+    };
     void sync();
     provider.on?.("accountsChanged", onAccounts);
     provider.on?.("chainChanged", onChain);
@@ -297,6 +356,7 @@ export default function Home() {
 
   const refreshMarkets = useCallback(async (quiet = false) => {
     if (!quiet) setBusy("refresh");
+    setMarketReadState("loading");
     try {
       const result = await callOmniMarketApi("markets", { cursor: 0, limit: 24 });
       if (!result.ok || !result.markets) throw new Error(result.ok ? "The contract returned no markets." : result.error);
@@ -304,11 +364,13 @@ export default function Home() {
       setMarketCursor(result.nextCursor ?? null);
       setMarketTotal(result.total ?? result.markets.length);
       setMarketLoadError("");
+      setMarketReadState("ready");
       if (result.markets.length > 0 && !result.markets.some((item) => item.market.market_id === selectedId)) setSelectedId(result.markets[0].market.market_id);
       setNotice({ label: "Live market index", detail: `${result.markets.length} market${result.markets.length === 1 ? "" : "s"} loaded from the deployed contract.`, tone: "good" });
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The deployed contract could not be read.";
       setMarketLoadError(detail);
+      setMarketReadState("error");
       setNotice({ label: "Contract read failed", detail, tone: "warn" });
     } finally {
       if (!quiet) setBusy("");
@@ -435,14 +497,12 @@ export default function Home() {
     try {
       const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
       const account = accounts[0] ?? "";
-      const chains = { testnetBradbury, testnetAsimov };
-      const client = createClient({ chain: chains[network], account: account as `0x${string}`, provider: provider as NonNullable<Parameters<typeof createClient>[0]>["provider"] });
-      await client.connect(network as Parameters<typeof client.connect>[0]);
-      const chainId = (await provider.request({ method: "eth_chainId" })) as string;
-      setWallet(account); setWalletChainId(chainId); setWalletVerified(true); setWalletMenuOpen(false);
+      if (!account) throw new Error("The wallet returned no account.");
+      const chainId = await ensureWalletNetwork(provider, network);
+      setWallet(account); setWalletChainId(chainId); setWalletVerified(true); setSelectedNetwork(network); setWalletMenuOpen(false);
       setNotice({ label: "Wallet connected", detail: `${shortAddress(account)} is connected to ${networkLabel(network)}.`, tone: "good" });
     } catch (error) {
-      setNotice({ label: "Wallet connection cancelled", detail: error instanceof Error ? error.message : "The wallet did not approve the request.", tone: "warn" });
+      setNotice({ label: "Wallet connection failed", detail: walletErrorMessage(error), tone: "warn" });
     } finally { setWalletBusy(false); }
   }
 
@@ -480,8 +540,10 @@ export default function Home() {
     if (!provider || !wallet) throw new Error("Connect a wallet before signing a transaction.");
     if (!/^0x[0-9a-fA-F]{40}$/.test(OMNIMARKET_ADDRESS)) throw new Error("Configure NEXT_PUBLIC_OMNIMARKET_CONTRACT_ADDRESS for this deployment.");
     if (selectedNetwork !== "testnetBradbury") throw new Error("Switch to Bradbury before signing OmniMarket transactions.");
+    const chainId = await ensureWalletNetwork(provider, "testnetBradbury");
+    setWalletChainId(chainId);
+    setWalletVerified(true);
     const client = createClient({ chain: testnetBradbury, account: wallet as `0x${string}`, provider: provider as NonNullable<Parameters<typeof createClient>[0]>["provider"] });
-    await client.connect("testnetBradbury" as Parameters<typeof client.connect>[0]);
     const txHash = await client.writeContract({ address: OMNIMARKET_ADDRESS, functionName, args: args as Parameters<typeof client.writeContract>[0]["args"], value: valueWei });
     const receipt = await client.waitForTransactionReceipt({ hash: txHash, status: TransactionStatus.ACCEPTED });
     if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) throw new Error(`Execution returned ${receipt.txExecutionResultName}.`);
@@ -573,14 +635,15 @@ export default function Home() {
   }
 
   function renderWalletControl() {
+    const walletLabel = walletBusy ? "Connecting..." : !wallet ? "Connect Wallet" : !walletReady ? "Verify Bradbury" : shortAddress(wallet);
     return <div className="wallet-control" ref={walletPanelRef}>
       {walletReady ? <span className="wallet-network"><i />Bradbury</span> : null}
-      <button className="wallet-button" type="button" onClick={() => wallet ? setWalletMenuOpen((open) => !open) : void connectWallet()} disabled={walletBusy} aria-expanded={wallet ? walletMenuOpen : undefined}>{walletBusy ? "Connecting..." : wallet ? shortAddress(wallet) : "Connect Wallet"}</button>
+      <button className={`wallet-button ${!walletReady && wallet ? "needs-verification" : ""}`} type="button" onClick={() => !wallet || !walletReady ? void connectWallet("testnetBradbury") : setWalletMenuOpen((open) => !open)} disabled={walletBusy} aria-expanded={wallet ? walletMenuOpen : undefined}>{walletLabel}</button>
       {wallet && walletMenuOpen ? <div className="wallet-menu" role="dialog" aria-label="Wallet controls">
         <div className="wallet-menu-heading"><span>Connected wallet</span><strong>{shortAddress(wallet)}</strong></div>
         <button className="wallet-menu-action" type="button" onClick={() => void copyWalletAddress()}>{copiedAddress ? "Copied" : "Copy address"}</button>
         <label className="wallet-network-picker"><span>Network</span><select value={selectedNetwork} onChange={(event) => changeNetwork(event.target.value as NetworkName)}><option value="testnetBradbury">Bradbury · live contract</option><option value="testnetAsimov">Asimov · no deployment</option></select></label>
-        {selectedNetwork !== "testnetBradbury" ? <p className="wallet-menu-warning">Trading and claims are unavailable until Bradbury is selected.</p> : !walletVerified ? <p className="wallet-menu-warning">The wallet is connected, but its network still needs to be verified. Choose Bradbury to authorize it.</p> : null}
+        {selectedNetwork !== "testnetBradbury" ? <p className="wallet-menu-warning">Trading and claims are unavailable until Bradbury is selected.</p> : !walletVerified ? <><p className="wallet-menu-warning">The account is authorized, but the wallet network still needs verification.</p><button className="wallet-menu-action" type="button" onClick={() => void connectWallet("testnetBradbury")} disabled={walletBusy}>Switch to Bradbury</button></> : null}
         <button className="wallet-menu-disconnect" type="button" onClick={disconnectWallet}>Disconnect app</button>
         <button className="wallet-menu-revoke" type="button" onClick={() => void revokeWalletAccess()}>Revoke wallet access</button>
         <small>Disconnect clears this app session. Revoke asks the wallet extension to remove its account permission when supported.</small>
@@ -588,7 +651,7 @@ export default function Home() {
     </div>;
   }
 
-  if (!selectedMarket || !selected) return <main className="app-shell"><nav className="topbar" aria-label="Primary"><a className="brand" href="#home"><span className="brand-mark">OM</span><strong>OmniMarket</strong></a><div className="nav-links"><a href="/how-it-works">Protocol</a><a href="/docs">Docs</a><a href="https://github.com/Manablaq/omnimarket" target="_blank" rel="noreferrer">Source ↗</a></div>{renderWalletControl()}</nav><section className="live-empty reveal is-visible" id="home"><div className="section-kicker">LIVE CONTRACT DATA</div><h1>{marketLoadError ? "Market data unavailable." : "Reading the Bradbury market."}</h1><p>{marketLoadError || "Discovering markets from the deployed OmniMarket contract."}</p><button className="primary-action" type="button" onClick={() => void refreshMarkets(false)} disabled={busy === "refresh"}>{busy === "refresh" ? "Refreshing..." : "Retry contract read"}</button><p className={`live-status ${notice.tone}`} aria-live="polite">{notice.label}: {notice.detail}</p></section></main>;
+  if (!selectedMarket || !selected) return <main className="app-shell"><nav className="topbar" aria-label="Primary"><a className="brand" href="#home"><span className="brand-mark">OM</span><strong>OmniMarket</strong></a><div className="nav-links"><a href="/how-it-works">Protocol</a><a href="/docs">Docs</a><a href="https://github.com/Manablaq/omnimarket" target="_blank" rel="noreferrer">Source ↗</a></div>{renderWalletControl()}</nav><section className="market-bridge-state" id="home" aria-live="polite"><div className="section-kicker">{marketReadState === "error" ? "CONTRACT RECOVERY" : "LIVE CONTRACT DATA"}</div><div className="bridge-state-title"><span className={`bridge-state-dot ${marketReadState}`} />{marketReadState === "loading" ? "Loading live markets" : marketReadState === "error" ? "Market data is temporarily unavailable" : "No live markets yet"}</div><p>{marketReadState === "error" ? marketLoadError : marketReadState === "ready" ? "The Bradbury contract is online, but no markets have been indexed yet." : "Reading the deployed OmniMarket contract. The app shell remains available while the network responds."}</p><div className="bridge-state-actions"><button className="primary-action" type="button" onClick={() => void refreshMarkets(false)} disabled={busy === "refresh"}>{busy === "refresh" ? "Refreshing..." : "Retry contract read"}</button><a className="secondary-link" href="/docs">Read the docs</a></div><p className={`live-status ${notice.tone}`} aria-live="polite">{notice.label}: {notice.detail}</p></section></main>;
 
   return <main className="app-shell">
     <nav className="topbar" aria-label="Primary"><a className="brand" href="#home"><span className="brand-mark">OM</span><strong>OmniMarket</strong></a><div className="nav-links"><a href="/how-it-works">Protocol</a><a href="#markets">Markets</a><a href="/portfolio">Portfolio</a><a href="/docs">Docs</a><a href="#contract">Contract</a></div>{renderWalletControl()}</nav>

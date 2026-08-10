@@ -814,7 +814,11 @@ h1 {
 .fallback-card h1 { max-width: 700px; margin: 12px 0 18px; font-size: clamp(42px, 7vw, 76px); line-height: .98; }
 .fallback-card p { max-width: 650px; color: var(--muted); font-size: 17px; line-height: 1.6; }
 .fallback-detail { padding: 14px 16px; border-left: 3px solid var(--amber); background: var(--amber-soft); color: var(--ink) !important; font-size: 14px !important; overflow-wrap: anywhere; }
-.loading-label { color: var(--muted); font-size: 13px; font-weight: 700; }
+.loading-label { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.loading-label i, .bridge-state-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 4px rgba(31, 99, 242, .12); }
+.route-loading-state { max-width: 680px; margin: 96px auto; padding: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.route-loading-state strong { display: block; margin-top: 10px; color: var(--ink); font-size: 22px; }
+.route-loading-state p { margin: 8px 0 0; color: var(--muted); line-height: 1.55; }
 .loading-card { min-height: 420px; }
 .loading-bar, .loading-grid > div { border-radius: 6px; background: linear-gradient(90deg, var(--panel-soft), #e7ebf0, var(--panel-soft)); background-size: 200% 100%; animation: loading-shimmer 1.4s ease-in-out infinite; }
 .loading-bar-large { width: min(680px, 80%); height: 76px; margin: 26px 0 16px; }
@@ -934,6 +938,7 @@ body {
   background: var(--lime);
   color: var(--navy);
 }
+.wallet-button.needs-verification { background: var(--amber-soft); border-color: #d17a36; color: #8a451d; }
 
 .hero {
   max-width: 1520px;
@@ -1548,6 +1553,15 @@ body {
 .live-status.warn {
   color: #a34b20;
 }
+.market-bridge-state { max-width: 920px; margin: 90px auto; padding: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.bridge-state-title { display: flex; align-items: center; gap: 12px; margin: 14px 0 10px; color: var(--ink); font-size: clamp(28px, 4vw, 48px); font-weight: 800; letter-spacing: -.03em; }
+.bridge-state-dot.loading { animation: bridge-pulse 1.2s ease-in-out infinite; }
+.bridge-state-dot.ready { background: var(--green); box-shadow: 0 0 0 4px rgba(25, 121, 77, .12); }
+.bridge-state-dot.error { background: var(--amber); box-shadow: 0 0 0 4px rgba(209, 122, 54, .12); }
+.market-bridge-state > p:not(.live-status) { max-width: 680px; margin: 0; color: var(--muted); line-height: 1.6; }
+.bridge-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 24px; }
+.bridge-state-actions .secondary-link { display: inline-block; }
+@keyframes bridge-pulse { 50% { opacity: .35; transform: scale(.8); } }
 
 .reveal {
   opacity: 0;

@@ -110,8 +110,16 @@ test("public documentation routes explain contract trust boundaries", async () =
 
 test("omnimarket has explicit loading and recovery surfaces", async () => {
   const loading = await source("app/loading.tsx");
+  const page = await source("app/page.tsx");
   const error = await source("app/error.tsx");
-  assert.match(loading, /Reading Bradbury state/);
+  assert.match(loading, /Preparing the live market workspace/);
+  assert.match(loading, /Your wallet is not asked to sign anything/);
+  assert.match(page, /market-bridge-state/);
+  assert.match(page, /No live markets yet/);
+  assert.match(page, /Switch to Bradbury/);
+  assert.match(page, /wallet_switchEthereumChain/);
+  assert.match(page, /wallet_addEthereumChain/);
+  assert.doesNotMatch(page, /await client\.connect/);
   assert.match(error, /Try again/);
   assert.match(error, /No wallet funds were moved/);
 });
