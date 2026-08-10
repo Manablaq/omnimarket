@@ -104,6 +104,18 @@ const MIN_SEED_WEI = BigInt("2000000000000000000");
 const SETTLEMENT_SAFETY_DELAY_SECONDS = 120;
 const LOCKED_SETTLEMENT_TIMEOUT_SECONDS = 86400;
 
+function createEmptyMarketForm() {
+  return {
+    title: "",
+    outcome0: "",
+    outcome1: "",
+    rules: "",
+    sources: ["", "", "", "", ""],
+    closeTime: "",
+    liquidity: "",
+  };
+}
+
 function statusLabel(status: MarketStatus) {
   if (status === 1) return "Trading";
   if (status === 2) return "Locked";
@@ -302,15 +314,7 @@ export default function Home() {
   const [busy, setBusy] = useState("");
   const [currentTime, setCurrentTime] = useState(0);
   const [notice, setNotice] = useState<ActivityItem>({ label: "Contract bridge", detail: "Reading market discovery from Bradbury.", tone: "info" });
-  const [marketForm, setMarketForm] = useState({
-    title: "",
-    outcome0: "",
-    outcome1: "",
-    rules: "",
-    sources: ["", "", "", "", ""],
-    closeTime: "",
-    liquidity: "",
-  });
+  const [marketForm, setMarketForm] = useState(createEmptyMarketForm);
   const walletPanelRef = useRef<HTMLDivElement>(null);
 
   const walletReady = Boolean(wallet && walletChainId && walletVerified && selectedNetwork === "testnetBradbury");
@@ -638,7 +642,8 @@ export default function Home() {
       if (sources.length !== 5 || sources.some((source) => !/^https?:\/\//i.test(source))) throw new Error("Add five valid HTTP(S) evidence sources.");
       if (new Set(sources.map((source) => source.toLowerCase())).size !== 5) throw new Error("Evidence sources must be unique.");
       const txHash = await walletWrite("create_market", [marketForm.title.trim(), marketForm.outcome0.trim(), marketForm.outcome1.trim(), marketForm.rules.trim(), ...sources, closeTime, liquidity], liquidity);
-      setNotice({ label: "Market created", detail: `Accepted on Bradbury: ${txHash}. Refreshing the on-chain market index.`, tone: "good" });
+      setMarketForm(createEmptyMarketForm());
+      setNotice({ label: "Market created", detail: `Accepted on Bradbury: ${txHash}. The form was cleared and the on-chain market index is refreshing.`, tone: "good" });
       await refreshMarkets(false);
     } catch (error) { setNotice({ label: "Market creation failed", detail: error instanceof Error ? error.message : "The market was not created.", tone: "warn" }); }
     finally { setBusy(""); }

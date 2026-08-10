@@ -22,6 +22,7 @@ test("omnimarket frontend keeps the public market surface", async () => {
   assert.match(page, /claim_void_seed/);
   assert.match(page, /Reclaim void-market seed/);
   assert.match(page, /marketForm\.sources/);
+  assert.match(page, /setMarketForm\(createEmptyMarketForm\(\)\)/);
   assert.match(page, /Load more/);
   assert.match(page, /marketFilter/);
   assert.match(page, /marketSort/);
