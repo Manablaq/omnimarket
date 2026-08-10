@@ -103,7 +103,6 @@ const MAX_STAKE_WEI = BigInt("10000000000000000000");
 const MIN_SEED_WEI = BigInt("2000000000000000000");
 const SETTLEMENT_SAFETY_DELAY_SECONDS = 120;
 const LOCKED_SETTLEMENT_TIMEOUT_SECONDS = 86400;
-const DEFAULT_CLOSE_TIME = String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
 
 function statusLabel(status: MarketStatus) {
   if (status === 1) return "Trading";
@@ -304,19 +303,13 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [notice, setNotice] = useState<ActivityItem>({ label: "Contract bridge", detail: "Reading market discovery from Bradbury.", tone: "info" });
   const [marketForm, setMarketForm] = useState({
-    title: "Will genlayerlabs/genlayer-project-boilerplate exist on GitHub?",
-    outcome0: "Yes",
-    outcome1: "No",
-    rules: "Outcome 0 wins only if the GitHub API identifies the repository as existing. Outcome 1 wins if the repository is missing. Return inconclusive if the source cannot be fetched.",
-    sources: [
-      "https://api.github.com/repos/genlayerlabs/genlayer-project-boilerplate",
-      "https://github.com/genlayerlabs/genlayer-project-boilerplate",
-      "https://raw.githubusercontent.com/genlayerlabs/genlayer-project-boilerplate/main/README.md",
-      "https://api.github.com/repos/genlayerlabs/genlayer-project-boilerplate/contents",
-      "https://github.com/genlayerlabs/genlayer-project-boilerplate/blob/main/README.md",
-    ],
-    closeTime: DEFAULT_CLOSE_TIME,
-    liquidity: "2.0000",
+    title: "",
+    outcome0: "",
+    outcome1: "",
+    rules: "",
+    sources: ["", "", "", "", ""],
+    closeTime: "",
+    liquidity: "",
   });
   const walletPanelRef = useRef<HTMLDivElement>(null);
 
