@@ -1,14 +1,24 @@
 import { createClient } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
 
 type HexAddress = `0x${string}`;
 
 const client = createClient({
-  endpoint: process.env.GENLAYER_RPC_URL!,
+  chain: testnetBradbury,
 });
 
 const contractAddress = process.env.GENLAYER_OMNIMARKET_CONTRACT_ADDRESS as HexAddress;
 
 export async function createExampleMarket() {
+  const seedLiquidity = BigInt("2000000000000000000");
+  const closeTime = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+  const sources = [
+    "https://api.github.com/repos/genlayerlabs/genlayer-project-boilerplate",
+    "https://github.com/genlayerlabs/genlayer-project-boilerplate",
+    "https://raw.githubusercontent.com/genlayerlabs/genlayer-project-boilerplate/main/README.md",
+    "https://api.github.com/repos/genlayerlabs/genlayer-project-boilerplate/contents",
+    "https://github.com/genlayerlabs/genlayer-project-boilerplate/blob/main/README.md",
+  ];
   return client.writeContract({
     address: contractAddress,
     functionName: "create_market",
@@ -17,11 +27,11 @@ export async function createExampleMarket() {
       "Yes",
       "No",
       "Outcome 0 wins only if the GitHub API identifies the repository as existing.",
-      "https://api.github.com/repos/genlayerlabs/genlayer-project-boilerplate",
-      9999999999n,
-      10000n,
+      ...sources,
+      closeTime,
+      seedLiquidity,
     ],
-    value: 0n,
+    value: seedLiquidity,
   });
 }
 

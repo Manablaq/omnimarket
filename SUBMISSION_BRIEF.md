@@ -14,13 +14,21 @@ GenLayer prediction market primitive with validator-resolved outcomes.
 
 ## Documentation Site
 
-Use the hosted app or GitHub Pages documentation once the repository is published.
+Public guide: `https://omnimarket-two.vercel.app/docs`
+
+Repository documentation: `https://github.com/Manablaq/omnimarket/tree/main/docs`
+
+Replace the hosted URL if the final Vercel project domain changes.
 
 ## Contract Site
 
-Bradbury contract address: `0x0E1201A1F5477e635306BC3E34e68658e4489fBd`
+Deploy the current `studio_bradbury/omnimarket.py` as a new Bradbury instance before submission. Replace the placeholders below with the new address and explorer URL. The legacy virtual-units address must not be submitted for this version.
 
-Explorer: `https://explorer-bradbury.genlayer.com/address/0x0E1201A1F5477e635306BC3E34e68658e4489fBd`
+Bradbury contract address: `PENDING FINAL POST-HARDENING DEPLOYMENT`
+
+Explorer: `https://explorer-bradbury.genlayer.com/address/<FINAL_BRADBURY_ADDRESS>`
+
+Do not submit the pre-hardening validation address `0xACa9dE0bdac38d88A4E50e5f9DD7EDe969BB0A23`.
 
 ## Test Evidence
 
@@ -28,4 +36,4 @@ Explorer: `https://explorer-bradbury.genlayer.com/address/0x0E1201A1F5477e635306
 
 ## Description
 
-OmniMarket is a reusable GenLayer Intelligent Contract primitive for prediction markets that need trustless outcome resolution. Builders can create two-outcome markets with explicit rules, evidence URIs, close timestamps, virtual liquidity, and position tracking. The contract exposes live price views in basis points, records wallet positions, supports market locking, resolves outcomes through GenLayer nondeterministic web and AI consensus, and stores final outcome, confidence, reason code, summary, and payout state. For Bradbury Studio compatibility, it uses virtual stake units and includes an owner or creator-controlled deterministic resolution method for smoke testing, while preserving the real `resolve_market` path for validator-agreed web evidence resolution. The package includes a professional live-chart frontend, Studio deployment copy, API manifest, test plan, and submission log. It is useful for ecosystem milestone markets, data-event markets, governance prediction tools, milestone bets, and applications that need a reusable on-chain market/resolution pattern.
+OmniMarket is a reusable GenLayer Intelligent Contract primitive for prediction markets that need evidence-bound outcome resolution. Builders create two-outcome markets with explicit rules, five evidence URIs, close timestamps, native GEN seed liquidity, and wallet positions. The contract enforces payable value equality in wei, exposes pool-derived probabilities, indexes markets and account positions without a trusted off-chain indexer, records contract-written price observations for a live history chart, and resolves outcomes through GenLayer nondeterministic web and AI consensus. It stores final outcome, confidence, reason code, summary, per-source receipts, and claim state; winning claims use the documented native GEN transfer path. The permissionless `resolve_market` path is the only settlement mechanism, with no frontend or Studio bypass. The package includes a wallet-backed Bradbury frontend, read-only accepted-state API, live contextual reference feed, Studio deployment copy, API manifest, test plan, and evidence template. It is useful for ecosystem milestones, data-event markets, governance decisions, grants, bounties, and applications that need a reusable on-chain market/resolution pattern.

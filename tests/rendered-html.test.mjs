@@ -37,7 +37,8 @@ test("omnimarket api maps frontend actions to contract methods", async () => {
 
   assert.match(route, /GENLAYER_OMNIMARKET_CONTRACT_ADDRESS/);
   assert.match(route, /testnetBradbury/);
-  assert.doesNotMatch(route, /endpoint: RPC_URL/);
+  assert.match(route, /GENLAYER_RPC_URL/);
+  assert.match(route, /endpoint: RPC_URL/);
   assert.match(route, /read\(client, "get_market"/);
   assert.match(route, /read\(client, "get_price_bps"/);
   assert.match(route, /get_market_count/);
@@ -85,6 +86,13 @@ test("omnimarket contract keeps native value and on-chain indexing invariants", 
   assert.match(contract, /source_digests/);
   assert.match(contract, /source_confidences/);
   assert.match(contract, /normalized_winning_outcome/);
+  assert.match(contract, /_market_or_error/);
+  assert.match(contract, /MAX_PRICE_OBSERVATIONS/);
+  assert.match(contract, /10000 - price_0/);
+  assert.match(contract, /10000 - int\(price_0\)/);
+  assert.match(contract, /def get_position\(self, market_id: u256, account: Address\)[\s\S]*?_market_or_error\(market_id\)/);
+  assert.match(contract, /def get_position_by_account\(self, market_id: u256, account: str\)[\s\S]*?_market_or_error\(market_id\)/);
+  assert.doesNotMatch(contract, /self\.markets\.get\(market_id\)\.created_at/);
   assert.doesNotMatch(contract, /leader_data\["source_digests"\] == validator_data\["source_digests"\]/);
   assert.doesNotMatch(contract, /leader_data\["source_confidences"\] == validator_data\["source_confidences"\]/);
   assert.doesNotMatch(contract, /admin_resolve_for_studio/);
@@ -96,6 +104,8 @@ test("omnimarket exposes separate contextual reference data", async () => {
   assert.match(route, /api\.binance\.com/);
   assert.match(route, /Reference data only/);
   assert.match(route, /SUPPORTED_ASSETS/);
+  assert.match(route, /AbortController/);
+  assert.match(route, /Reference data temporarily unavailable/);
 });
 
 test("public documentation routes explain contract trust boundaries", async () => {
@@ -119,9 +129,17 @@ test("omnimarket has explicit loading and recovery surfaces", async () => {
   assert.match(page, /Switch to Bradbury/);
   assert.match(page, /wallet_switchEthereumChain/);
   assert.match(page, /wallet_addEthereumChain/);
+  assert.match(page, /eth_getCode/);
+  assert.match(page, /eth_accounts/);
+  assert.match(page, /same chain ID/);
+  assert.match(page, /RPC manually/);
+  assert.match(page, /aria-modal="true"/);
+  assert.match(page, /sourceTone\(source\)/);
+  assert.match(page, /referenceChartPath/);
   assert.doesNotMatch(page, /await client\.connect/);
   assert.match(error, /Try again/);
   assert.match(error, /No wallet funds were moved/);
+  assert.doesNotMatch(error, /error\.message/);
 });
 
 test("omnimarket includes a permissionless settlement keeper", async () => {
@@ -131,4 +149,18 @@ test("omnimarket includes a permissionless settlement keeper", async () => {
   assert.match(keeper, /resolve_market/);
   assert.match(operations, /permissionless/);
   assert.doesNotMatch(keeper, /PRIVATE_KEY/);
+});
+
+test("public release metadata and examples are deployable", async () => {
+  const layout = await source("app/layout.tsx");
+  const example = await source("examples/genlayer-js-usage.ts");
+  const checklist = await source("RELEASE_CHECKLIST.md");
+
+  assert.match(layout, /metadataBase/);
+  assert.match(layout, /Evidence-settled prediction markets/);
+  assert.match(example, /2000000000000000000/);
+  assert.equal((example.match(/https:\/\/[^"']+/g) ?? []).length, 5);
+  assert.doesNotMatch(example, /stateStatus/);
+  assert.match(checklist, /Final Bradbury deployment/);
+  assert.match(checklist, /Fresh evidence/);
 });

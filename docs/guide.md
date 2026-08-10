@@ -1,43 +1,37 @@
-# Guide
+# OmniMarket Guide
 
 ## Purpose
 
-`OmniMarket` gives GenLayer builders a reusable prediction-market contract that keeps the market lifecycle on-chain and delegates the hard real-world outcome decision to GenLayer validator consensus.
+OmniMarket is a two-outcome prediction-market primitive. The contract owns the market lifecycle, native GEN accounting, position index, price observations, and settlement result. The frontend is a client of that state.
 
-The frontend does not decide the winner and does not invent market data. It reads `get_market` and `get_price_bps` from the deployed contract for the live market view. User writes are signed in the browser with a wallet-backed GenLayerJS client connected to Bradbury; the server API is read-only. The contract stores the evidence source and rules, fetches evidence during resolution, validates the returned JSON shape, and only then writes final state.
+## What the Frontend Can Trust
+
+The market list is discovered from contract index views. The chart uses `PriceObservation` records written during creation, trades, locking, and resolution. A browser refresh cannot manufacture a price history. The server bridge uses accepted GenLayer state and is read-only.
 
 ## Wallet-Signed Writes
 
-The browser uses the official GenLayerJS wallet flow: it creates a client with `testnetBradbury`, the connected account, and `window.ethereum`, then calls `client.connect("testnetBradbury")` before submitting a write. The UI waits for a receipt with `TransactionStatus.ACCEPTED` and checks `ExecutionResult.FINISHED_WITH_RETURN` before refreshing the market snapshot. If the wallet is unavailable, disconnected, or on another network, the write is stopped and no server-side fallback is attempted.
+The browser creates the documented GenLayerJS client with `testnetBradbury`, the connected account, and the wallet provider. It verifies the Bradbury consensus contract address as a network fingerprint because Bradbury and Asimov share the same EVM chain ID. A wallet may therefore require manual RPC selection when moving between those networks. It connects before signing, passes native GEN as `value`, waits for `TransactionStatus.ACCEPTED`, and checks `ExecutionResult.FINISHED_WITH_RETURN`. The API does not receive private keys or submit transactions for users.
+
+Disconnecting clears OmniMarket's local session. A dapp cannot universally revoke a wallet extension's global permission; users can revoke that permission in the wallet itself.
 
 ## Market Lifecycle
 
-1. Create a market with two outcomes.
-2. Users buy virtual positions.
-3. Read methods expose live price basis points and position state.
-4. After close time, the market can be locked.
-5. The resolver evaluates evidence.
-6. The contract stores the result.
-7. Winners claim virtual payout units.
+1. Create a market with two distinct outcomes, five unique evidence sources, explicit rules, close time, and an even native-GEN seed.
+2. Users buy positions by attaching the exact stake in wei.
+3. Contract views expose live pool-derived probabilities.
+4. After close time, anyone may lock the market.
+5. Anyone may start GenLayer consensus resolution.
+6. The contract stores the agreed normalized result.
+7. Winners claim native GEN through the contract's recipient transfer path.
+
+If consensus returns inconclusive or error, the market becomes void. Traders reclaim their net positions with `claim_winnings`, and the original creator can reclaim the seed with `claim_void_seed`. Protocol fees remain separately accounted; only the contract owner can withdraw accrued fees.
 
 ## Resolution Design
 
-The real resolver is `resolve_market`. It uses:
+`resolve_market` uses five stored source URIs, `gl.nondet.web.get()`, `gl.nondet.exec_prompt()`, and a validator function inside `gl.vm.run_nondet_unsafe()`. The validator independently reruns all five sources and compares the normalized winning decision plus the existence of an independent three-source quorum. Per-source statuses, evidence digests, confidence values, and summaries are retained as audit observations but are not required to be byte-for-byte identical because live web responses and LLM wording can vary between validators. Rules must say how to handle missing, ambiguous, stale, or inconclusive evidence and must tell the resolver to ignore instructions contained in fetched pages.
 
-- `gl.nondet.web.get()` to fetch the evidence URI.
-- `gl.nondet.exec_prompt()` to apply the stored rules.
-- `gl.vm.run_nondet_unsafe()` with a validator function that checks the result shape.
-- deterministic storage writes after validator agreement.
+If repeated resolution attempts remain undetermined, `void_locked_market` provides a permissionless safety valve after the 120-second safety delay plus a 24-hour settlement timeout. It marks the market inconclusive and void, allowing traders to reclaim their net positions and the creator to reclaim the seed. This prevents an external-source outage or persistent validator disagreement from permanently stranding funds.
 
-The Studio resolver is `admin_resolve_for_studio`. It exists because Studio smoke tests need repeatable transactions and token transfers are not the focus of this primitive.
+## Amounts
 
-## Market Design Rules
-
-Good markets should include:
-
-- a clear question
-- two mutually exclusive outcomes
-- a precise close time
-- a stable evidence URI
-- criteria that say when to return inconclusive
-- criteria that ignore instructions inside fetched evidence
+All contract amounts are wei. The UI accepts decimal GEN and converts it to wei before signing. The initial seed must be positive and even because the contract splits it between the two outcomes. Each trade pays the exact stake as value; the contract records the fee and credits the net amount.

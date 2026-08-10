@@ -1,51 +1,55 @@
 # Vercel Deployment
 
-This project is intended to become a public prediction market app after the `OmniMarket` contract is deployed on Bradbury.
+## Required Contract Configuration
 
-## Required Environment Variables
-
-Set these in Vercel before public launch:
+Deploy a new native-GEN OmniMarket instance on Bradbury first. Then add both variables in Vercel for **Production and Preview**:
 
 ```text
 GENLAYER_CHAIN_ID=bradbury
-GENLAYER_OMNIMARKET_CONTRACT_ADDRESS=0x0E1201A1F5477e635306BC3E34e68658e4489fBd
+GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com
+GENLAYER_OMNIMARKET_CONTRACT_ADDRESS=0xYOUR_NEW_BRADBURY_ADDRESS
+NEXT_PUBLIC_OMNIMARKET_CONTRACT_ADDRESS=0xYOUR_NEW_BRADBURY_ADDRESS
 ```
 
-## Vercel Import Settings
+The server variable powers accepted-state reads. `GENLAYER_RPC_URL` is an optional explicit Bradbury endpoint; when omitted, the SDK's official Bradbury chain configuration supplies its default. The public variable powers browser wallet writes. They must identify the same new contract. There is no legacy address fallback.
+
+## Import Settings
 
 - Repository: `https://github.com/Manablaq/omnimarket`
-- Framework preset: `Next.js`
+- Framework: `Next.js`
 - Install command: `npm install`
 - Build command: `npm run build`
-- Output directory: leave as Vercel default
-- Node.js version: `22.x`
+- Output directory: Vercel default
+- Node.js: `22.x`
 
-## Contract Read Flow
+## What the API Reads
 
-The frontend polls:
+The read-only route at `/api/omnimarket` uses GenLayerJS `testnetBradbury` and accepted state reads. If `GENLAYER_RPC_URL` is set, it is passed as the SDK endpoint override. It discovers all markets from `get_market_count` and `get_market_id_at`, then reads `get_market` and both `get_price_bps` values. The history action reads contract-written `get_price_observation` records. The portfolio action reads the account index, positions, and payout previews.
 
-- `get_market(market_id)`
-- `get_price_bps(market_id, 0)`
-- `get_price_bps(market_id, 1)`
+If the configured address is a legacy contract or the variables are missing, the route returns a visible error. It does not silently substitute market 1.
 
-Those reads power the live chart, pool depth, market status, and current odds.
+## What the Browser Signs
 
-## Contract Write Flow
+The browser creates a wallet-backed GenLayerJS client and signs:
 
-The write controls map to:
+- `create_market` with native GEN value equal to seed liquidity.
+- `buy_position` with native GEN value equal to the stake.
+- `lock_market` after close.
+- `resolve_market` after locking.
+- `claim_winnings` for finalized positions.
 
-- `create_market`
-- `buy_position`
-- `admin_resolve_for_studio`
+The app waits for an `ACCEPTED` receipt and checks `FINISHED_WITH_RETURN` before refreshing. No private key is stored in Vercel and the API never signs for a user.
 
-Public production writes require a wallet-backed GenLayer client or a configured write relay. The app does not fake write success when signing is unavailable.
+## Launch Checklist
 
-## Public Launch Checklist
+1. Deploy the new contract and record the address and transaction hash.
+2. Set all three variables above in Vercel.
+3. Redeploy after saving variables.
+4. Open the production URL and confirm the market index loads from the new instance.
+5. Create a small market with a future close time and an even native-GEN seed.
+6. Verify the first chart observation appears from the contract.
+7. Trade from a second funded wallet and verify both pool totals and both chart lines change.
+8. After close, lock and resolve through the actual consensus path.
+9. Claim from a winning wallet on Bradbury and verify the native balance change.
 
-1. Deploy `studio_bradbury/omnimarket.py` on Bradbury.
-2. Record the contract address in `TEST_LOG_BRADBURY.md`.
-3. Set `GENLAYER_OMNIMARKET_CONTRACT_ADDRESS` in Vercel to `0x0E1201A1F5477e635306BC3E34e68658e4489fBd`.
-4. Create at least one live market from Studio or the app.
-5. Confirm the app chart changes after `buy_position`.
-6. Confirm `get_market` reflects pool totals after trade.
-7. Confirm the production URL has no unconfigured contract warning.
+There is no frontend bypass resolver. Both Studio and production use the same `resolve_market` path; source receipts and the final state must be produced by the deployed Intelligent Contract.

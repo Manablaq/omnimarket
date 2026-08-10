@@ -7,9 +7,13 @@ type ContractAddress = ReadContractRequest["address"];
 type ContractArgs = NonNullable<ReadContractRequest["args"]>;
 
 const CONTRACT_ADDRESS = process.env.GENLAYER_OMNIMARKET_CONTRACT_ADDRESS ?? "";
-const MAX_MARKETS = 50;
+const RPC_URL = process.env.GENLAYER_RPC_URL?.trim() ?? "";
+const MAX_MARKETS = 24;
 const MAX_POINTS = 120;
 const MAX_SOURCE_POINTS = 5;
+const MAX_CONCURRENT_READS = 6;
+
+export const maxDuration = 30;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,10 +23,14 @@ function json(body: unknown, status = 200) {
 }
 
 function toNumber(value: unknown) {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "number") return value;
-  if (typeof value === "string" && /^-?\d+$/.test(value)) return Number(value);
-  return 0;
+  const parsed = typeof value === "bigint"
+    ? Number(value)
+    : typeof value === "number"
+      ? value
+      : typeof value === "string" && /^-?\d+$/.test(value)
+        ? Number(value)
+        : 0;
+  return Number.isSafeInteger(parsed) ? parsed : 0;
 }
 
 function toAmount(value: unknown) {
@@ -106,7 +114,10 @@ function normalizeSourceObservation(value: unknown) {
 async function loadClient(): Promise<GenLayerClient> {
   if (!CONTRACT_ADDRESS) throw new Error("Set GENLAYER_OMNIMARKET_CONTRACT_ADDRESS before using live contract reads.");
   const sdk = await import("genlayer-js");
-  return sdk.createClient({ chain: testnetBradbury } as Parameters<GenLayerSdk["createClient"]>[0]);
+  const config = RPC_URL
+    ? { chain: testnetBradbury, endpoint: RPC_URL }
+    : { chain: testnetBradbury };
+  return sdk.createClient(config as Parameters<GenLayerSdk["createClient"]>[0]);
 }
 
 function contractAddress(): ContractAddress {
@@ -115,6 +126,20 @@ function contractAddress(): ContractAddress {
 
 function contractArgs(values: unknown[]): ContractArgs {
   return values as ContractArgs;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()));
+  return results;
 }
 
 async function read(client: GenLayerClient, functionName: string, args: unknown[] = []) {
@@ -131,7 +156,8 @@ async function listMarketIds(client: GenLayerClient, cursor = 0, limit = MAX_MAR
   const pageSize = Math.max(1, Math.min(limit, MAX_MARKETS));
   const end = Math.min(count, start + pageSize);
   if (start >= end) return { ids: [], nextCursor: null as number | null, total: count };
-  const ids = await Promise.all(Array.from({ length: end - start }, (_, index) => read(client, "get_market_id_at", [BigInt(start + index + 1)])));
+  const indexes = Array.from({ length: end - start }, (_, index) => index);
+  const ids = await mapWithConcurrency(indexes, MAX_CONCURRENT_READS, (index) => read(client, "get_market_id_at", [BigInt(start + index + 1)]));
   return { ids: ids.map((value: unknown) => toNumber(value)).filter((id: number) => id > 0), nextCursor: end < count ? end : null, total: count };
 }
 
@@ -153,14 +179,15 @@ async function marketSnapshot(client: GenLayerClient, marketId: number) {
 }
 
 async function snapshots(client: GenLayerClient, ids: number[]) {
-  const results = await Promise.all(ids.map((id) => marketSnapshot(client, id)));
+  const results = await mapWithConcurrency(ids, MAX_CONCURRENT_READS, (id) => marketSnapshot(client, id));
   return results.sort((a, b) => a.market.market_id - b.market.market_id);
 }
 
 async function portfolio(client: GenLayerClient, account: string) {
   const count = Math.min(toNumber(await read(client, "get_account_market_count", [account])), MAX_MARKETS);
-  const ids = await Promise.all(Array.from({ length: count }, (_, index) => read(client, "get_account_market_id_at", [account, BigInt(index + 1)])));
-  return Promise.all(ids.map(async (rawId: unknown) => {
+  const indexes = Array.from({ length: count }, (_, index) => index);
+  const ids = await mapWithConcurrency(indexes, MAX_CONCURRENT_READS, (index) => read(client, "get_account_market_id_at", [account, BigInt(index + 1)]));
+  return mapWithConcurrency(ids, MAX_CONCURRENT_READS, async (rawId: unknown) => {
     const marketId = toNumber(rawId);
     const [positionRaw, payoutRaw, snapshot] = await Promise.all([
       read(client, "get_position_by_account", [BigInt(marketId), account]),
@@ -168,21 +195,23 @@ async function portfolio(client: GenLayerClient, account: string) {
       marketSnapshot(client, marketId),
     ]);
     return { marketId, position: normalizePosition(positionRaw), payoutWei: toAmount(payoutRaw), snapshot };
-  }));
+  });
 }
 
 async function history(client: GenLayerClient, marketId: number) {
   const count = Math.min(toNumber(await read(client, "get_price_observation_count", [BigInt(marketId)])), MAX_POINTS);
   if (count === 0) return [];
   const start = Math.max(1, count - MAX_POINTS + 1);
-  const points = await Promise.all(Array.from({ length: count - start + 1 }, (_, offset) => read(client, "get_price_observation", [BigInt(marketId), BigInt(start + offset)])));
+  const offsets = Array.from({ length: count - start + 1 }, (_, offset) => offset);
+  const points = await mapWithConcurrency(offsets, MAX_CONCURRENT_READS, (offset) => read(client, "get_price_observation", [BigInt(marketId), BigInt(start + offset)]));
   return points.map(normalizeObservation);
 }
 
 async function sourceEvidence(client: GenLayerClient, marketId: number) {
   const count = Math.min(toNumber(await read(client, "get_source_observation_count", [BigInt(marketId)])), MAX_SOURCE_POINTS);
   if (count === 0) return [];
-  const points = await Promise.all(Array.from({ length: count }, (_, index) => read(client, "get_source_observation", [BigInt(marketId), BigInt(index + 1)])));
+  const indexes = Array.from({ length: count }, (_, index) => index);
+  const points = await mapWithConcurrency(indexes, MAX_CONCURRENT_READS, (index) => read(client, "get_source_observation", [BigInt(marketId), BigInt(index + 1)]));
   return points.map(normalizeSourceObservation);
 }
 
@@ -223,6 +252,12 @@ export async function POST(request: Request) {
     }
     return json({ ok: false, error: `Unsupported API action: ${action}. Wallet writes are signed in the browser.` }, 400);
   } catch (error) {
-    return json({ ok: false, error: error instanceof Error ? error.message : "Contract bridge failed.", configured: Boolean(CONTRACT_ADDRESS) }, 500);
+    const message = error instanceof Error ? error.message : "";
+    const knownError = /unknown market|index out of range|invalid outcome|no position/.test(message);
+    return json({
+      ok: false,
+      error: knownError ? message : "Contract bridge unavailable. Retry shortly.",
+      configured: Boolean(CONTRACT_ADDRESS),
+    }, knownError ? 404 : 502);
   }
 }

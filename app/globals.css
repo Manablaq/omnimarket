@@ -778,7 +778,9 @@ h1 {
   background: var(--panel-soft);
 }
 
-.source-audit-card.valid { border-top: 3px solid var(--green); }
+.source-audit-card.outcome-0 { border-top: 3px solid var(--blue); }
+.source-audit-card.outcome-1 { border-top: 3px solid var(--red); }
+.source-audit-card.inconclusive { border-top: 3px solid var(--amber); }
 .source-audit-card.unavailable { border-top: 3px solid var(--amber); }
 .source-audit-card p { min-height: 52px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .source-audit-card > div { display: flex; justify-content: space-between; gap: 8px; }
@@ -1623,7 +1625,8 @@ body {
   }
 
   .hero h1 {
-    font-size: 58px;
+    font-size: clamp(40px, 12vw, 58px);
+    overflow-wrap: anywhere;
   }
 
   .hero-terminal {

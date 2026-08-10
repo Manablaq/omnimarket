@@ -1,5 +1,8 @@
 const SUPPORTED_ASSETS = new Set(["BTC", "ETH", "BNB", "SOL"]);
 const MAX_CANDLES = 120;
+const REFERENCE_TIMEOUT_MS = 8000;
+
+export const maxDuration = 12;
 
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -16,6 +19,16 @@ function number(value: string | null, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+async function fetchWithTimeout(input: string, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REFERENCE_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") ?? "BTC").trim().toUpperCase();
@@ -27,8 +40,8 @@ export async function GET(request: Request) {
   const symbol = `${asset}USDT`;
   try {
     const [tickerResponse, candlesResponse] = await Promise.all([
-      fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, { cache: "no-store" }),
-      fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`, { cache: "no-store" }),
+      fetchWithTimeout(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, { cache: "no-store" }),
+      fetchWithTimeout(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`, { cache: "no-store" }),
     ]);
     if (!tickerResponse.ok || !candlesResponse.ok) throw new Error("Reference venue did not return a successful response.");
     const ticker = (await tickerResponse.json()) as { lastPrice?: string; priceChangePercent?: string };
@@ -41,18 +54,24 @@ export async function GET(request: Request) {
       close: Number(candle[4]),
       volume: Number(candle[5]),
     }));
+    if (!candles.length || candles.some((candle) => Object.values(candle).some((value) => !Number.isFinite(value)))) {
+      throw new Error("Reference venue returned invalid candle data.");
+    }
+    const price = Number(ticker.lastPrice ?? NaN);
+    const change24h = Number(ticker.priceChangePercent ?? NaN);
+    if (!Number.isFinite(price) || !Number.isFinite(change24h)) throw new Error("Reference venue returned invalid ticker data.");
     return response({
       ok: true,
       source: "Binance public market data",
       settlement: "Reference data only. Settlement is determined by the five on-chain evidence sources and GenLayer consensus.",
       symbol,
       interval,
-      price: Number(ticker.lastPrice ?? 0),
-      change24h: Number(ticker.priceChangePercent ?? 0),
+      price,
+      change24h,
       candles,
       updatedAt: Date.now(),
     });
-  } catch (error) {
-    return response({ ok: false, error: error instanceof Error ? error.message : "Reference data unavailable." }, 502);
+  } catch {
+    return response({ ok: false, error: "Reference data temporarily unavailable." }, 502);
   }
 }
