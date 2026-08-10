@@ -8,11 +8,13 @@ async function source(path) {
 
 test("omnimarket frontend keeps the public market surface", async () => {
   const page = await source("app/page.tsx");
+  const styles = await source("app/globals.css");
 
   assert.match(page, /OmniMarket/);
   assert.match(page, /Markets that settle from/);
   assert.match(page, /yes-line/);
   assert.match(page, /no-line/);
+  assert.match(styles, /\.probability-chart \.no-line[\s\S]*stroke-dasharray/);
   assert.match(page, /Sign GEN position/);
   assert.match(page, /GenLayer web consensus/);
   assert.match(page, /Five-source audit/);

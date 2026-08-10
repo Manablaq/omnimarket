@@ -1106,6 +1106,8 @@ body {
 
 .probability-chart .no-line {
   stroke: var(--red);
+  stroke-dasharray: 7 4;
+  stroke-linecap: round;
 }
 
 .field-notes {
