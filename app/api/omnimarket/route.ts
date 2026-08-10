@@ -49,7 +49,9 @@ function normalizeMarket(value: unknown) {
     outcome_0: String(recordValue(value, ["outcome_0"], 3) ?? ""),
     outcome_1: String(recordValue(value, ["outcome_1"], 4) ?? ""),
     rules: String(recordValue(value, ["rules"], 5) ?? ""),
-    source_uris: [6, 7, 8, 9, 10].map((index) => String(recordValue(value, ["source_uri"], index) ?? "")),
+    source_uris: [0, 1, 2, 3, 4].map((sourceIndex) => String(
+      recordValue(value, [`source_${sourceIndex}_uri`, "source_uri"], 6 + sourceIndex) ?? "",
+    )),
     close_time: toNumber(recordValue(value, ["close_time"], 11)),
     status: toNumber(recordValue(value, ["status"], 12)),
     created_at: toNumber(recordValue(value, ["created_at"], 13)),

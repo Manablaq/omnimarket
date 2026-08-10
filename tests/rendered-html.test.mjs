@@ -41,6 +41,7 @@ test("omnimarket api maps frontend actions to contract methods", async () => {
   assert.match(route, /get_market_count/);
   assert.match(route, /get_price_observation/);
   assert.match(route, /get_source_observation/);
+  assert.match(route, /source_\$\{sourceIndex\}_uri/);
   assert.match(route, /nextCursor/);
   assert.match(route, /readContract/);
   assert.doesNotMatch(route, /stateStatus/);
