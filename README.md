@@ -1,11 +1,12 @@
 # OmniMarket
 
-OmniMarket is a reusable GenLayer Intelligent Contract primitive for two-outcome prediction markets. It stores market definitions, native GEN liquidity, positions, accepted price observations, and evidence-bound settlement state on-chain. The web app is a read-through and wallet-signing client for that contract; it is not the source of truth.
+OmniMarket is a reusable GenLayer Intelligent Contract primitive for two-outcome prediction markets. It stores market definitions, native GEN liquidity, positions, contract-written price observations, and evidence-bound settlement state on-chain. The web app is a read-through and wallet-signing client for that contract; it is not the source of truth.
 
 ## What Is Real
 
 - Market discovery comes from `get_market_count` and `get_market_id_at`.
-- Market data and odds come from accepted Bradbury contract reads.
+- Market data and odds come from configured Bradbury contract reads.
+- The displayed pool total is the sum of the two on-chain outcome pools. It is deliberately not called volume because this contract does not store a cumulative trade-volume counter.
 - The chart uses contract-written `PriceObservation` records, not browser-generated points.
 - Creation and trading attach native GEN in wei to payable contract methods.
 - Resolution independently evaluates five declared evidence sources inside GenLayer nondeterministic execution and requires an independently reproduced three-source quorum. Validators compare the normalized settlement decision, not volatile raw web digests or LLM confidence wording.
@@ -13,6 +14,8 @@ OmniMarket is a reusable GenLayer Intelligent Contract primitive for two-outcome
 - A void market lets traders reclaim net positions and its creator reclaim the original seed once.
 - Protocol fees are separately accounted and can only be withdrawn by the contract owner up to the accrued balance.
 - The server API is read-only. It never signs, simulates success, or holds user funds.
+- `/api/omnimarket/health` exposes configuration parity checks for the server address, browser address, Bradbury chain, and RPC setting.
+- `scripts/release-smoke.sh` verifies the public health response and live market discovery without using a wallet or sending a transaction.
 
 ## Important Deployment Boundary
 
@@ -33,7 +36,7 @@ The two values must match exactly. Leaving either value empty or pointing to the
 
 - `contracts/omnimarket.py`: canonical Intelligent Contract source.
 - `studio_bradbury/omnimarket.py`: byte-for-byte Studio copy.
-- `app/api/omnimarket/route.ts`: server-side accepted-state read bridge.
+- `app/api/omnimarket/route.ts`: server-side read bridge.
 - `app/page.tsx`: browser wallet, market console, portfolio, and lifecycle UI.
 - `scripts/resolve-markets.sh`: optional permissionless settlement keeper for scheduled operations.
 
@@ -44,7 +47,7 @@ The two values must match exactly. Leaving either value empty or pointing to the
 3. `get_price_bps` exposes the current pool-derived probability.
 4. `lock_market` is permissionless after `close_time`.
 5. `resolve_market` runs after the 120-second safety delay, fetches all five sources, and reaches a validator-agreed normalized result.
-6. If no accepted result is available after the settlement timeout, anyone can call `void_locked_market` so funds remain recoverable.
+6. If no final resolution result is available after the settlement timeout, anyone can call `void_locked_market` so funds remain recoverable.
 7. `claim_winnings` sends the caller's native GEN payout after finalization.
 8. `claim_void_seed` returns the creator's seed when resolution is void.
 9. `withdraw_protocol_fees` is an owner-only treasury operation; it cannot withdraw more than accrued fees.
@@ -65,9 +68,12 @@ npm run lint
 npm test
 PYTHONPYCACHEPREFIX=/private/tmp/omni-pycache python3 -m py_compile contracts/omnimarket.py studio_bradbury/omnimarket.py
 npm run build
+npm run verify
 ```
 
 The build requires dependencies to be installed first. The repository intentionally does not provide a wallet or signing secret to the server.
+
+The release CI workflow repeats the lint, test, Webpack build, high-severity audit, Python syntax, canonical/Studio parity, and whitespace checks on every push and pull request.
 
 ## Documentation
 
@@ -76,6 +82,13 @@ The build requires dependencies to be installed first. The repository intentiona
 - [Vercel deployment](VERCEL_DEPLOYMENT.md)
 - [Settlement keeper operations](OPERATIONS_KEEPER.md)
 - [Public release checklist](RELEASE_CHECKLIST.md)
+- [Release evidence template](RELEASE_EVIDENCE_TEMPLATE.md)
+- [Production readiness matrix](PRODUCTION_READINESS.md)
+- [V3 protocol design and migration boundary](V3_PROTOCOL_DESIGN.md)
+- [V3 API manifest](V3_API_MANIFEST.md)
+- [V3 Bradbury deployment runbook](V3_DEPLOYMENT_BRADBURY.md)
+- [Security](SECURITY.md)
+- [Incident response](INCIDENT_RESPONSE.md)
 - [Studio test plan](STUDIO_BRADBURY_TEST_PLAN.md)
 - [Testing guide](docs/testing.md)
 - [Architecture](docs/architecture.md)

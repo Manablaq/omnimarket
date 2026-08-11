@@ -15,7 +15,10 @@ This checklist is the release gate for the public OmniMarket app. A green local 
 - [ ] Set `NEXT_PUBLIC_OMNIMARKET_CONTRACT_ADDRESS` to the same final address.
 - [ ] Set `GENLAYER_RPC_URL` to the Bradbury RPC and `GENLAYER_CHAIN_ID` to `bradbury`.
 - [ ] Redeploy after changing environment variables.
+- [ ] Verify `/api/omnimarket/health` returns `status: "configured"` and confirms the server/public contract addresses match before testing the app.
 - [ ] Verify the public `/api/omnimarket` route returns `ok: true`, discovers markets from the final contract, and exposes the stored five source URLs.
+- [ ] Run `OMNIMARKET_PUBLIC_URL=https://your-production-url bash scripts/release-smoke.sh` and retain its output with the release evidence.
+- [ ] Copy [RELEASE_EVIDENCE_TEMPLATE.md](RELEASE_EVIDENCE_TEMPLATE.md) to the final release evidence record and populate its release identity and configuration-parity fields before announcing the URL.
 
 ## 3. Browser smoke test
 
@@ -32,9 +35,16 @@ This checklist is the release gate for the public OmniMarket app. A green local 
 
 - [ ] Fresh evidence covers deployment, initial count, creation, indexed discovery, prices, observations, positions, locking, resolution, source receipts, claims, void recovery, and protocol fee accounting.
 - [ ] Include transaction hashes or exact accepted/finalized read responses. Screenshots alone are not sufficient.
+- [ ] Complete the Bradbury lifecycle and browser sections of the release evidence record. A completed template must identify the same contract address and git commit as this release.
 - [ ] Confirm unknown market IDs fail cleanly and do not return a zero-value record.
 - [ ] Confirm outcome prices sum to exactly 10,000 basis points.
 - [ ] Confirm observation history remains bounded with no unbounded storage growth; the chart remains available through the configured observation cap.
+
+## 4a. Test-mode evidence
+
+- [ ] Run the Python 3.12 Direct Mode suite with `python -m pytest tests/direct -v` and retain the passing CI run. Keep its scope explicit: deterministic storage-boundary checks belong in Direct Mode; native-value, consensus, and browser-wallet proof still require the separate checks below.
+- [ ] Run Studio Mode for consensus-dependent web reads and the full accepted/finalized lifecycle. Direct Mode is for fast in-memory checks; Studio Mode is for network-backed consensus evidence. See `docs/testing.md` and the [official GenLayer testing documentation](https://docs.genlayer.com/developers/intelligent-contracts/testing).
+- [ ] Run browser E2E against the deployed Vercel URL with a real Bradbury wallet, including rejected-network, rejected-signature, pending, accepted, finalization wait, execution-failure, retry, and claim states. A form must clear only after a finalized `FINISHED_WITH_RETURN` receipt.
 
 ## 5. Local validation
 
@@ -47,6 +57,7 @@ npm test
 npm audit
 PYTHONPYCACHEPREFIX=/private/tmp/omni-pycache python3 -m py_compile contracts/*.py studio_bradbury/*.py
 bash -n scripts/resolve-markets.sh
+bash -n scripts/release-smoke.sh
 npx next build --webpack
 git diff --check
 ```

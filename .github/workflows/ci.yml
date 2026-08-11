@@ -1,0 +1,43 @@
+name: OmniMarket CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - run: python3 -m py_compile contracts/*.py studio_bradbury/*.py
+      - run: cmp contracts/omnimarket.py studio_bradbury/omnimarket.py
+      - run: cmp contracts/omnimarket_v3.py studio_bradbury/omnimarket_v3.py
+      - run: bash -n scripts/resolve-markets.sh && bash -n scripts/release-smoke.sh && bash -n scripts/release-smoke-v3.sh
+      - run: git diff --check
+
+  direct-mode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-direct.txt
+      - run: genvm-lint check contracts/omnimarket_v3.py
+      - run: python -m pytest tests/direct -v

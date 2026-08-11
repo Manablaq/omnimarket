@@ -15,6 +15,7 @@ test("omnimarket frontend keeps the public market surface", async () => {
   assert.match(page, /yes-line/);
   assert.match(page, /no-line/);
   assert.match(styles, /\.probability-chart \.no-line[\s\S]*stroke-dasharray/);
+  assert.match(styles, /\.quote-disclaimer/);
   assert.match(page, /Sign GEN position/);
   assert.match(page, /GenLayer web consensus/);
   assert.match(page, /Five-source audit/);
@@ -28,6 +29,9 @@ test("omnimarket frontend keeps the public market surface", async () => {
   assert.match(page, /marketSort/);
   assert.match(page, /callOmniMarketApi\("markets"/);
   assert.match(page, /price0Bps/);
+  assert.match(page, /poolTotalWei/);
+  assert.match(page, /Pool total/);
+  assert.doesNotMatch(page, /volumeWei/);
   assert.doesNotMatch(page, /OutcomeAttestationRegistry/);
   assert.doesNotMatch(page, /SemanticPolicyGate/);
 });
@@ -35,6 +39,8 @@ test("omnimarket frontend keeps the public market surface", async () => {
 test("omnimarket api maps frontend actions to contract methods", async () => {
   const page = await source("app/page.tsx");
   const route = await source("app/api/omnimarket/route.ts");
+  const health = await source("app/api/omnimarket/health/route.ts");
+  const nextConfig = await source("next.config.ts");
 
   assert.match(route, /GENLAYER_OMNIMARKET_CONTRACT_ADDRESS/);
   assert.match(route, /testnetBradbury/);
@@ -48,16 +54,36 @@ test("omnimarket api maps frontend actions to contract methods", async () => {
   assert.match(route, /source_\$\{sourceIndex\}_uri/);
   assert.match(route, /nextCursor/);
   assert.match(route, /readContract/);
+  assert.match(route, /poolTotalWei/);
+  assert.doesNotMatch(route, /volumeWei/);
+  assert.match(route, /withTimeout/);
+  assert.match(route, /rateLimitResponse/);
+  assert.match(route, /MAX_REQUEST_BYTES/);
+  assert.match(route, /await request\.text\(\)/);
+  assert.match(route, /requiredNumber/);
+  assert.match(route, /requiredAmount/);
+  assert.match(route, /invalid historical price complement/);
+  assert.match(route, /price0Bps \+ price1Bps !== 10000/);
+  assert.match(health, /addressMatch/);
+  assert.match(health, /GENLAYER_CHAIN_ID/);
+  assert.match(nextConfig, /X-Content-Type-Options/);
+  assert.match(nextConfig, /X-Frame-Options/);
   assert.doesNotMatch(route, /stateStatus/);
   assert.doesNotMatch(route, /FALLBACK_MARKET_ID/);
   assert.doesNotMatch(page, /0x0E1201A1F5477e635306BC3E34e68658e4489fBd/);
   assert.doesNotMatch(route, /writeContract/);
   assert.match(page, /provider: provider/);
   assert.match(page, /testnetBradbury/);
-  assert.match(page, /TransactionStatus\.ACCEPTED/);
+  assert.match(page, /TransactionStatus\.FINALIZED/);
   assert.match(page, /ExecutionResult\.FINISHED_WITH_RETURN/);
   assert.match(page, /waitForTransactionReceipt/);
-  assert.match(page, /Pool estimate/);
+  assert.match(page, /Finalizing market/);
+  assert.match(page, /Finalizing position/);
+  assert.match(page, /GEN position finalized/);
+  assert.match(page, /Seed recovery finalized/);
+  assert.match(page, /estimateImmediatePayout/);
+  assert.match(page, /Immediate-settlement estimate/);
+  assert.match(page, /Later trades can change a final winning payout/);
   assert.doesNotMatch(page, /featuredFallback/);
   assert.doesNotMatch(page, /initialSnapshots/);
 });
@@ -100,6 +126,86 @@ test("omnimarket contract keeps native value and on-chain indexing invariants", 
   assert.equal(studio, contract);
 });
 
+test("V3 keeps its own schema, account discovery index, and deterministic settlement boundaries", async () => {
+  const v3 = await source("contracts/omnimarket_v3.py");
+  const studioV3 = await source("studio_bradbury/omnimarket_v3.py");
+  const bridge = await source("app/api/omnimarket/v3/route.ts");
+  const design = await source("V3_PROTOCOL_DESIGN.md");
+
+  assert.match(v3, /class OmniMarketV3\(gl\.Contract\)/);
+  assert.match(v3, /market_version=u32\(3\)/);
+  assert.match(v3, /account_market_counts: TreeMap\[str, u256\]/);
+  assert.match(v3, /account_market_ids: TreeMap\[str, u256\]/);
+  assert.match(v3, /account_market_seen: TreeMap\[str, u256\]/);
+  assert.match(v3, /def get_account_market_count/);
+  assert.match(v3, /def get_account_market_id_at/);
+  assert.match(v3, /def _index_account_market/);
+  assert.match(v3, /def quote_buy/);
+  assert.match(v3, /def quote_sell/);
+  assert.match(v3, /def quote_add_liquidity/);
+  assert.match(v3, /def quote_remove_liquidity_outcome/);
+  assert.match(v3, /def add_liquidity/);
+  assert.match(v3, /def remove_liquidity/);
+  assert.match(v3, /def challenge_market/);
+  assert.match(v3, /def resolve_challenge/);
+  assert.match(v3, /def void_market/);
+  assert.match(v3, /def pause_risk/);
+  assert.match(v3, /def claim_winnings/);
+  assert.match(v3, /def claim_void_position/);
+  assert.match(v3, /self\.protocol\.claim_liability \+ self\.protocol\.outstanding_challenge_bonds/);
+  assert.match(v3, /market\.fee_units = market\.fee_units \+ challenge\.bond_units/);
+  assert.match(v3, /source URI must use https/);
+  assert.doesNotMatch(v3, /source URI must use http or https/);
+  assert.doesNotMatch(v3, /marketCommitment/);
+  assert.equal(studioV3, v3);
+  assert.match(bridge, /GENLAYER_OMNIMARKET_V3_CONTRACT_ADDRESS/);
+  assert.match(bridge, /get_account_market_count/);
+  assert.match(bridge, /get_lp_position_by_account/);
+  assert.match(bridge, /get_protocol_state/);
+  assert.match(bridge, /quote_add_liquidity/);
+  assert.match(bridge, /quote_remove_liquidity/);
+  assert.match(bridge, /invalid V3 price vector/);
+  assert.match(bridge, /withTimeout/);
+  assert.match(bridge, /rateLimit/);
+  assert.match(bridge, /total - MAX_POINTS \+ 1/);
+  assert.match(bridge, /total - MAX_SOURCE_POINTS \+ 1/);
+  assert.match(bridge, /end - size/);
+  assert.doesNotMatch(bridge, /writeContract/);
+  assert.match(design, /Design record only\. Not deployed/);
+  assert.match(design, /refunded only when the second consensus result changes/);
+  assert.match(design, /not a contract-verified cryptographic commitment/);
+});
+
+test("V3 public surface uses the isolated bridge and protected signed flows", async () => {
+  const page = await source("app/v3/page.tsx");
+  const bridge = await source("app/api/omnimarket/v3/route.ts");
+  const health = await source("app/api/omnimarket/v3/health/route.ts");
+
+  assert.match(page, /NEXT_PUBLIC_OMNIMARKET_V3_CONTRACT_ADDRESS/);
+  assert.match(page, /api\/omnimarket\/v3/);
+  assert.match(page, /TransactionStatus\.FINALIZED/);
+  assert.match(page, /ExecutionResult\.FINISHED_WITH_RETURN/);
+  assert.match(page, /quote_buy/);
+  assert.match(page, /quote_sell/);
+  assert.match(page, /quote_add_liquidity/);
+  assert.match(page, /quote_remove_liquidity/);
+  assert.match(page, /Withdraw claims with 1% limit/);
+  assert.match(page, /The final LP share remains until settlement/);
+  assert.match(page, /resolve_challenge/);
+  assert.match(page, /Resolve challenge with consensus/);
+  assert.match(page, /claim_void_lp/);
+  assert.match(page, /Claim void LP refund/);
+  assert.match(page, /V2 remains untouched/);
+  assert.doesNotMatch(page, /GENLAYER_OMNIMARKET_CONTRACT_ADDRESS/);
+  assert.match(bridge, /quote_remove_liquidity_outcome/);
+  assert.match(bridge, /per-market backing limit/);
+  assert.doesNotMatch(bridge, /writeContract/);
+  assert.match(health, /GENLAYER_OMNIMARKET_V3_CONTRACT_ADDRESS/);
+  assert.match(health, /NEXT_PUBLIC_OMNIMARKET_V3_CONTRACT_ADDRESS/);
+  assert.match(health, /addressMatch/);
+  assert.doesNotMatch(health, /RPC_URL,/);
+});
+
 test("omnimarket exposes separate contextual reference data", async () => {
   const route = await source("app/api/omnimarket/reference/route.ts");
   assert.match(route, /api\.binance\.com/);
@@ -114,8 +220,13 @@ test("public documentation routes explain contract trust boundaries", async () =
   const how = await source("app/how-it-works/page.tsx");
   const portfolio = await source("app/portfolio/page.tsx");
   assert.match(docs, /Trust boundaries/);
+  assert.match(docs, /Bradbury testnet only/);
+  assert.match(docs, /not a real-value financial product/);
   assert.match(docs, /five evidence sources/);
+  assert.match(docs, /V3 candidate boundary/);
+  assert.match(docs, /must not receive public traffic/);
   assert.match(how, /120-second safety delay/);
+  assert.match(how, /Testnet use only/);
   assert.match(portfolio, /private key/);
 });
 
@@ -132,6 +243,11 @@ test("omnimarket has explicit loading and recovery surfaces", async () => {
   assert.match(page, /wallet_addEthereumChain/);
   assert.match(page, /eth_getCode/);
   assert.match(page, /eth_accounts/);
+  assert.match(page, /provider\.on\?\.\("accountsChanged", onAccounts\)/);
+  assert.match(page, /provider\.on\?\.\("chainChanged", onChain\)/);
+  assert.match(page, /provider\.on\?\.\("disconnect", onDisconnect\)/);
+  assert.match(page, /removeListener\?\.\("disconnect", onDisconnect\)/);
+  assert.match(page, /Wallet disconnected/);
   assert.match(page, /same chain ID/);
   assert.match(page, /RPC manually/);
   assert.match(page, /aria-modal="true"/);
@@ -152,16 +268,73 @@ test("omnimarket includes a permissionless settlement keeper", async () => {
   assert.doesNotMatch(keeper, /PRIVATE_KEY/);
 });
 
+test("omnimarket keeps rendered markets visible during background polling", async () => {
+  const page = await source("app/page.tsx");
+  assert.match(page, /quiet && current === "ready" \? current : "loading"/);
+  assert.match(page, /quiet && current === "ready" \? current : "error"/);
+});
+
+test("reference data has a bounded public request budget", async () => {
+  const referenceRoute = await source("app/api/omnimarket/reference/route.ts");
+  const marketRoute = await source("app/api/omnimarket/route.ts");
+  assert.match(referenceRoute, /RATE_LIMIT_MAX_REQUESTS = 60/);
+  assert.match(referenceRoute, /MAX_RATE_LIMIT_KEYS = 2_000/);
+  assert.match(marketRoute, /MAX_RATE_LIMIT_KEYS = 2_000/);
+  assert.match(referenceRoute, /makeRateLimitCapacity/);
+  assert.match(marketRoute, /makeRateLimitCapacity/);
+  assert.match(referenceRoute, /status: 429/);
+});
+
 test("public release metadata and examples are deployable", async () => {
   const layout = await source("app/layout.tsx");
   const example = await source("examples/genlayer-js-usage.ts");
   const checklist = await source("RELEASE_CHECKLIST.md");
+  const evidenceTemplate = await source("RELEASE_EVIDENCE_TEMPLATE.md");
 
   assert.match(layout, /metadataBase/);
+  assert.match(layout, /getMetadataBase/);
+  assert.match(layout, /DEFAULT_SITE_URL/);
   assert.match(layout, /Evidence-settled prediction markets/);
   assert.match(example, /2000000000000000000/);
   assert.equal((example.match(/https:\/\/[^"']+/g) ?? []).length, 5);
   assert.doesNotMatch(example, /stateStatus/);
   assert.match(checklist, /Final Bradbury deployment/);
   assert.match(checklist, /Fresh evidence/);
+  assert.match(checklist, /api\/omnimarket\/health/);
+  assert.match(checklist, /Direct Mode/);
+  assert.match(checklist, /real Bradbury wallet/);
+  assert.match(checklist, /RELEASE_EVIDENCE_TEMPLATE/);
+  assert.match(evidenceTemplate, /Status: template only/);
+  assert.match(evidenceTemplate, /Success is shown only after `FINALIZED` and `FINISHED_WITH_RETURN`/);
+  assert.match(evidenceTemplate, /Bradbury testnet/);
+  const readiness = await source("PRODUCTION_READINESS.md");
+  assert.match(readiness, /\| 54 \|/);
+  assert.match(readiness, /public-testnet ready only/);
+  assert.match(readiness, /finalized receipt and `FINISHED_WITH_RETURN`/);
+  const v3Design = await source("V3_PROTOCOL_DESIGN.md");
+  const v3Runbook = await source("V3_DEPLOYMENT_BRADBURY.md");
+  assert.match(v3Design, /Design record only\. Not deployed/);
+  assert.match(v3Design, /fully collateralized conditional-claim market-maker design/);
+  assert.match(v3Design, /must not block `lock`, `resolve`, `challenge`, `void`/);
+  assert.match(v3Design, /Acceptance Evidence Required Before a V3 Deployment/);
+  assert.match(v3Design, /assets >= liabilities \+ fees/);
+  assert.match(v3Runbook, /genvm-lint check contracts\/omnimarket_v3\.py/);
+  assert.match(v3Runbook, /python3\.12 -m venv \.venv-genlayer/);
+  const security = await source("SECURITY.md");
+  assert.match(security, /private key/);
+  const incident = await source("INCIDENT_RESPONSE.md");
+  assert.match(incident, /suspected contract loss/);
+  const workflow = await source(".github/workflows/ci.yml");
+  assert.match(workflow, /node-version: 22/);
+  assert.match(workflow, /npm audit --audit-level=high/);
+  assert.match(workflow, /release-smoke\.sh/);
+  assert.match(workflow, /release-smoke-v3\.sh/);
+  const smoke = await source("scripts/release-smoke.sh");
+  assert.match(smoke, /api\/omnimarket\/health/);
+  assert.match(smoke, /Live contract discovery succeeded/);
+  const v3Smoke = await source("scripts/release-smoke-v3.sh");
+  assert.match(v3Smoke, /api\/omnimarket\/v3\/health/);
+  assert.match(v3Smoke, /api\/omnimarket\/v3/);
+  assert.match(v3Smoke, /market_version !== 3/);
+  assert.match(v3Smoke, /V3 live contract discovery succeeded/);
 });

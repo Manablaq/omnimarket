@@ -2,6 +2,8 @@
 
 All amounts are `u256` wei. `1 GEN = 10^18 wei`. Payable methods require the transaction value to equal the amount in calldata.
 
+The public web bridge is read-only. It exposes accepted contract state and never signs a transaction, simulates success, or holds user funds. Wallet writes are signed in the browser and must be checked through the GenLayerJS transaction receipt before the UI treats them as complete.
+
 ## Write Methods
 
 ### `create_market(title, outcome_0, outcome_1, rules, source_0_uri, source_1_uri, source_2_uri, source_3_uri, source_4_uri, close_time, seed_liquidity_units) -> u256`
@@ -84,6 +86,8 @@ Returns the number of contract-written price observations.
 
 Returns the one-based observation containing timestamp, both prices, and both pool totals.
 
+The pool totals are balances used by the contract's pricing curve. They are not a cumulative trade-volume counter. OmniMarket labels this value `poolTotalWei` in its API and UI so it is not mistaken for volume.
+
 ### `preview_payout(market_id, account) -> u256`
 
 Calculates a finalized or current payout estimate without claiming.
@@ -107,3 +111,9 @@ Returns the creator seed still refundable for a void market, or zero for an open
 `PriceObservation` stores `observed_at`, both basis-point prices, and both pool totals. These observations are the source of the live chart.
 
 `FeeState` stores aggregate accrued, withdrawn, and available protocol fee accounting.
+
+## Read bridge endpoints
+
+`POST /api/omnimarket` accepts the read actions `markets`, `snapshot`, `history`, `sources`, and `portfolio`. Responses are `cache-control: no-store`, bounded by the API page limits, and fail closed when a required contract field or price complement is invalid. Contract reads have a bounded timeout and the route applies a best-effort per-client rate limit.
+
+`GET /api/omnimarket/health` reports server/public address parity, Bradbury chain configuration, and RPC configuration. It is a configuration readiness check; a successful response does not replace a live contract smoke test.

@@ -1,0 +1,5 @@
+# GenLayer Direct Mode requires Python 3.12 or newer.
+# Install in a project-local virtual environment; see V3_DEPLOYMENT_BRADBURY.md.
+genlayer-test
+genvm-linter
+pytest

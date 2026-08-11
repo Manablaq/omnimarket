@@ -9,9 +9,10 @@ GENLAYER_CHAIN_ID=bradbury
 GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com
 GENLAYER_OMNIMARKET_CONTRACT_ADDRESS=0xYOUR_NEW_BRADBURY_ADDRESS
 NEXT_PUBLIC_OMNIMARKET_CONTRACT_ADDRESS=0xYOUR_NEW_BRADBURY_ADDRESS
+NEXT_PUBLIC_SITE_URL=https://omnimarket-two.vercel.app
 ```
 
-The server variable powers accepted-state reads. `GENLAYER_RPC_URL` is an optional explicit Bradbury endpoint; when omitted, the SDK's official Bradbury chain configuration supplies its default. The public variable powers browser wallet writes. They must identify the same new contract. There is no legacy address fallback.
+The server address and RPC variables power contract reads. `GENLAYER_RPC_URL` is required by the public read bridge so production reads use the exact Bradbury endpoint you configured. The public address powers browser wallet writes. Both address variables must identify the same new contract. `NEXT_PUBLIC_SITE_URL` is the canonical public URL used for page metadata and must be an absolute HTTPS URL. There is no legacy address fallback.
 
 ## Import Settings
 
@@ -24,7 +25,7 @@ The server variable powers accepted-state reads. `GENLAYER_RPC_URL` is an option
 
 ## What the API Reads
 
-The read-only route at `/api/omnimarket` uses GenLayerJS `testnetBradbury` and accepted state reads. If `GENLAYER_RPC_URL` is set, it is passed as the SDK endpoint override. It discovers all markets from `get_market_count` and `get_market_id_at`, then reads `get_market` and both `get_price_bps` values. The history action reads contract-written `get_price_observation` records. The portfolio action reads the account index, positions, and payout previews.
+The read-only route at `/api/omnimarket` uses GenLayerJS `testnetBradbury` and the configured Bradbury RPC. It discovers all markets from `get_market_count` and `get_market_id_at`, then reads `get_market` and both `get_price_bps` values. The history action reads contract-written `get_price_observation` records. The portfolio action reads the account index, positions, and payout previews.
 
 If the configured address is a legacy contract or the variables are missing, the route returns a visible error. It does not silently substitute market 1.
 
@@ -43,7 +44,7 @@ The app waits for an `ACCEPTED` receipt and checks `FINISHED_WITH_RETURN` before
 ## Launch Checklist
 
 1. Deploy the new contract and record the address and transaction hash.
-2. Set all three variables above in Vercel.
+2. Set all four variables above in Vercel.
 3. Redeploy after saving variables.
 4. Open the production URL and confirm the market index loads from the new instance.
 5. Create a small market with a future close time and an even native-GEN seed.

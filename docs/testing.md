@@ -12,9 +12,26 @@ npm run build
 
 The contract and Studio copy must remain identical. The source test asserts that invariant.
 
+## Direct Mode Checks
+
+GenLayer Direct Mode is the deterministic in-memory layer for contract tests. It requires Python 3.12 or newer; the repository's `direct-mode` CI job installs the official `genlayer-test` package and executes `tests/direct`.
+
+To run the same checks locally with Python 3.12:
+
+```bash
+python3.12 -m venv .venv-direct
+source .venv-direct/bin/activate
+python -m pip install -r requirements-direct.txt
+python -m pytest tests/direct -v
+```
+
+The Direct Mode suite proves initialization and deterministic read/revert behavior. It does not pretend to prove native-value transfers or web consensus. Those require the separate Studio and browser checks below.
+
 ## Studio Checks
 
-Use `STUDIO_BRADBURY_TEST_PLAN.md` for the lifecycle sequence. Studio can validate method shape, storage, indexes, price movement, lock transitions, source observation storage, and the live resolution path. Record every transaction hash and accepted result.
+Use `STUDIO_BRADBURY_TEST_PLAN.md` for the lifecycle sequence. Studio can validate method shape, storage, indexes, price movement, lock transitions, source observation storage, and the live resolution path. Record every transaction hash, execution result, and finalization status.
+
+GenLayer documents two complementary testing modes: use Direct Mode for fast deterministic in-memory unit and invariant checks, and use Studio Mode for network-backed consensus and integration checks. Direct Mode should mock web and LLM inputs; Studio Mode should use real network reads and record transaction status plus execution result. Do not treat a local mock as proof that a Bradbury resolution completed. See the [official testing documentation](https://docs.genlayer.com/developers/intelligent-contracts/testing).
 
 ## Bradbury Native-Value Checks
 
@@ -29,12 +46,12 @@ Use a funded Bradbury wallet to prove the parts Studio cannot prove reliably:
 ## Evidence Required for Public Release
 
 - New contract address and deployment transaction.
-- Accepted create transaction with attached value.
-- Accepted trade transaction with attached value.
+- Finalized create transaction with attached value.
+- Finalized trade transaction with attached value.
 - `get_market` before and after the trade.
 - Both `get_price_bps` values before and after the trade.
 - At least two `get_price_observation` records.
-- Accepted lock and resolution transactions.
+- Finalized lock and resolution transactions.
 - Final market state with confidence, reason code, summary, and resolution timestamp.
 - Five stored `get_source_observation` records showing each source status and vote.
 - Successful claim and native wallet balance delta.

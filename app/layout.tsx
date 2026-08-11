@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const DEFAULT_SITE_URL = "https://omnimarket-two.vercel.app";
+
+function getMetadataBase(): URL {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL);
+  } catch {
+    return new URL(DEFAULT_SITE_URL);
+  }
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://omnimarket-two.vercel.app"),
+  metadataBase: getMetadataBase(),
   title: {
     default: "OmniMarket | Evidence-settled prediction markets",
     template: "%s | OmniMarket",

@@ -6,11 +6,11 @@ OmniMarket is a two-outcome prediction-market primitive. The contract owns the m
 
 ## What the Frontend Can Trust
 
-The market list is discovered from contract index views. The chart uses `PriceObservation` records written during creation, trades, locking, and resolution. A browser refresh cannot manufacture a price history. The server bridge uses accepted GenLayer state and is read-only.
+The market list is discovered from contract index views. The chart uses `PriceObservation` records written during creation, trades, locking, and resolution. A browser refresh cannot manufacture a price history. The server bridge uses configured GenLayer contract reads and is read-only.
 
 ## Wallet-Signed Writes
 
-The browser creates the documented GenLayerJS client with `testnetBradbury`, the connected account, and the wallet provider. It verifies the Bradbury consensus contract address as a network fingerprint because Bradbury and Asimov share the same EVM chain ID. A wallet may therefore require manual RPC selection when moving between those networks. It connects before signing, passes native GEN as `value`, waits for `TransactionStatus.ACCEPTED`, and checks `ExecutionResult.FINISHED_WITH_RETURN`. The API does not receive private keys or submit transactions for users.
+The browser creates the documented GenLayerJS client with `testnetBradbury`, the connected account, and the wallet provider. It verifies the Bradbury consensus contract address as a network fingerprint because Bradbury and Asimov share the same EVM chain ID. A wallet may therefore require manual RPC selection when moving between those networks. It connects before signing, passes native GEN as `value`, waits for `TransactionStatus.FINALIZED`, and checks `ExecutionResult.FINISHED_WITH_RETURN`. A signed or accepted transaction is not presented as completed: OmniMarket clears a completed form only after that finalization check. The API does not receive private keys or submit transactions for users.
 
 Disconnecting clears OmniMarket's local session. A dapp cannot universally revoke a wallet extension's global permission; users can revoke that permission in the wallet itself.
 
