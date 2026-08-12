@@ -1012,15 +1012,26 @@ class OmniMarketV3(gl.Contract):
 
     # Consensus and input helpers are intentionally isolated from accounting.
     def _consensus_resolution(self, market: MarketV3):
-        uris = [market.source_0_uri, market.source_1_uri, market.source_2_uri, market.source_3_uri, market.source_4_uri]
-        def leader_fn(): return self._evaluate_sources(market, uris)
+        # Nondeterministic callbacks cannot access storage-backed objects. Copy the
+        # market into memory before the consensus boundary and capture that copy.
+        market_memory = gl.storage.copy_to_memory(market)
+        uris = [
+            market_memory.source_0_uri,
+            market_memory.source_1_uri,
+            market_memory.source_2_uri,
+            market_memory.source_3_uri,
+            market_memory.source_4_uri,
+        ]
+
+        def leader_fn(): return self._evaluate_sources(market_memory, uris)
+
         def validator_fn(leader_result) -> bool:
             if not isinstance(leader_result, gl.vm.Return): return False
             leader = leader_result.calldata
-            validator = self._evaluate_sources(market, uris)
+            validator = self._evaluate_sources(market_memory, uris)
             if not (
-                _is_valid_resolution(leader, market.outcome_count)
-                and _is_valid_resolution(validator, market.outcome_count)
+                _is_valid_resolution(leader, market_memory.outcome_count)
+                and _is_valid_resolution(validator, market_memory.outcome_count)
                 and leader.get("outcome") == validator.get("outcome")
             ):
                 return False

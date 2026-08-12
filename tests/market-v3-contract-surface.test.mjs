@@ -173,6 +173,15 @@ test("V3 enforces exact native-value attachment and routes every claim through b
   }
 });
 
+test("V3 copies storage-backed market data before the nondeterministic consensus boundary", async () => {
+  const contract = await readFile(contractPath, "utf8");
+  const consensus = methodBody(contract, "_consensus_resolution");
+  assert.match(consensus, /gl\.storage\.copy_to_memory\(market\)/);
+  assert.match(consensus, /_evaluate_sources\(market_memory, uris\)/);
+  assert.doesNotMatch(consensus, /_evaluate_sources\(market, uris\)/);
+  assert.doesNotMatch(consensus, /_is_valid_resolution\([^\n]+market\.outcome_count/);
+});
+
 test("V3 browser wallet flow tracks account, network, and provider disconnect events", async () => {
   const page = await readFile(pagePath, "utf8");
   assert.match(page, /wallet_switchEthereumChain/);
