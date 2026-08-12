@@ -179,6 +179,8 @@ test("V3 copies storage-backed market data before the nondeterministic consensus
   assert.match(consensus, /gl\.storage\.copy_to_memory\(market\)/);
   assert.match(consensus, /_evaluate_sources\(market_memory, uris\)/);
   assert.doesNotMatch(consensus, /_evaluate_sources\(market, uris\)/);
+  assert.doesNotMatch(consensus, /self\._evaluate_sources\(/);
+  assert.match(contract, /def _evaluate_sources\(market: "MarketV3", uris\):/);
   assert.doesNotMatch(consensus, /_is_valid_resolution\([^\n]+market\.outcome_count/);
 });
 

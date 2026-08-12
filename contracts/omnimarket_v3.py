@@ -139,6 +139,44 @@ def _source_result(raw, evidence_text: str, uri: str, outcome_count: u32):
     }
 
 
+def _evaluate_sources(market: "MarketV3", uris):
+    """Evaluate copied market data without capturing contract storage in consensus."""
+    votes, valid, sources = [0, 0, 0], 0, []
+    for source_index in range(SOURCE_COUNT):
+        uri = uris[source_index]
+        evidence = _fetch_body(uri)
+        try:
+            raw = gl.nondet.exec_prompt(_source_prompt(market, uri, evidence), response_format="json")
+        except Exception as exc:
+            raw = {
+                "outcome": "inconclusive",
+                "confidence": 0,
+                "reason_code": "llm_call_failed",
+                "summary": _safe(str(exc), 256),
+            }
+        source = _source_result(raw, evidence, uri, market.outcome_count)
+        if source["status"] == "valid":
+            valid += 1
+            if source["vote"] in ("0", "1", "2"):
+                votes[int(source["vote"])] += 1
+        sources.append(source)
+    winning = "inconclusive"
+    for index in range(int(market.outcome_count)):
+        if votes[index] >= int(REQUIRED_SOURCE_VOTES):
+            winning = str(index)
+    reason = "source_quorum" if winning != "inconclusive" else "no_source_quorum"
+    if valid < int(REQUIRED_SOURCE_VOTES):
+        reason = "insufficient_sources"
+    return {
+        "outcome": winning,
+        "confidence": max(votes) * 2000,
+        "reason_code": reason,
+        "summary": str(valid) + " sources available; votes " + str(votes),
+        "valid_sources": valid,
+        "sources": sources,
+    }
+
+
 def _is_valid_resolution(data, outcome_count: u32) -> bool:
     if not isinstance(data, dict):
         return False
@@ -1023,12 +1061,12 @@ class OmniMarketV3(gl.Contract):
             market_memory.source_4_uri,
         ]
 
-        def leader_fn(): return self._evaluate_sources(market_memory, uris)
+        def leader_fn(): return _evaluate_sources(market_memory, uris)
 
         def validator_fn(leader_result) -> bool:
             if not isinstance(leader_result, gl.vm.Return): return False
             leader = leader_result.calldata
-            validator = self._evaluate_sources(market_memory, uris)
+            validator = _evaluate_sources(market_memory, uris)
             if not (
                 _is_valid_resolution(leader, market_memory.outcome_count)
                 and _is_valid_resolution(validator, market_memory.outcome_count)
@@ -1045,42 +1083,6 @@ class OmniMarketV3(gl.Contract):
                 and validator.get("valid_sources", 0) >= int(REQUIRED_SOURCE_VOTES)
             )
         return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
-
-    def _evaluate_sources(self, market: MarketV3, uris):
-        votes, valid, sources = [0, 0, 0], 0, []
-        for source_index in range(SOURCE_COUNT):
-            uri = uris[source_index]
-            evidence = _fetch_body(uri)
-            try:
-                raw = gl.nondet.exec_prompt(_source_prompt(market, uri, evidence), response_format="json")
-            except Exception as exc:
-                raw = {
-                    "outcome": "inconclusive",
-                    "confidence": 0,
-                    "reason_code": "llm_call_failed",
-                    "summary": _safe(str(exc), 256),
-                }
-            source = _source_result(raw, evidence, uri, market.outcome_count)
-            if source["status"] == "valid":
-                valid += 1
-                if source["vote"] in ("0", "1", "2"):
-                    votes[int(source["vote"])] += 1
-            sources.append(source)
-        winning = "inconclusive"
-        for index in range(int(market.outcome_count)):
-            if votes[index] >= int(REQUIRED_SOURCE_VOTES):
-                winning = str(index)
-        reason = "source_quorum" if winning != "inconclusive" else "no_source_quorum"
-        if valid < int(REQUIRED_SOURCE_VOTES):
-            reason = "insufficient_sources"
-        return {
-            "outcome": winning,
-            "confidence": max(votes) * 2000,
-            "reason_code": reason,
-            "summary": str(valid) + " sources available; votes " + str(votes),
-            "valid_sources": valid,
-            "sources": sources,
-        }
 
     def _store_source_observations(self, market_id: u256, resolution_round: u32, sources) -> None:
         count = self.source_observation_counts.get(market_id)
